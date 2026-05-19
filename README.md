@@ -1,12 +1,14 @@
 # 🌍 Climate Financial Risk Intelligence Platform (CRIP v3.5 Pro)
 
 An enterprise-grade risk intelligence architecture that translates real-time meteorological telemetry into predictive asset exposure modeling, automated operational directives, and error-driven calibration matrices for commercial agriculture across West Africa.
+
 ## 🔗 Live Demo
 
 Access the deployed platform here: [Insert Link]
 
-Demo Credentials:
-- Executive: executive_lead / gh_exec_2026
+**Demo Credentials:**
+- Executive: `executive_lead` / `gh_exec_2026`
+
 ---
 
 ## 💼 The Business Problem & Solution
@@ -63,7 +65,9 @@ To run this platform locally on your machine for auditing or testing:
 3. Install the required external third-party dependencies:
    ```bash
    pip install -r requirements.txt
-   Walkthrough Access Credentials:
+   streamlit run app.py
+
+Walkthrough Access Credentials:
 System Admin Profile: User: system_admin_kumi | Pass: gh_admin_2026
 
 Executive Lead Profile: User: executive_lead | Pass: gh_exec_2026
