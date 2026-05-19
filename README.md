@@ -4,7 +4,7 @@ An enterprise-grade risk intelligence architecture that translates real-time met
 
 ## 🔗 Live Demo
 
-Access the deployed platform here: [Insert Link]
+Access the deployed platform here: [https://climate-risk-intelligence.streamlit.app/]
 
 **Demo Credentials:**
 - Executive: `executive_lead` / `gh_exec_2026`
