@@ -42,7 +42,7 @@ system_logger = initialize_production_logger()
 # ==========================================
 # 💾 LAYER 1: HARDENED THREAD-SAFE PERSISTENCE INTERFACES
 # ==========================================
-# FIX: Dynamically resolve an absolute path relative to this script's location
+# FIX: Force an explicit absolute path to insulate file generation on Streamlit Cloud containers
 WORKING_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE_PATH = os.path.join(WORKING_DIR, "climate_risk_vault.db")
 
@@ -53,11 +53,15 @@ class DatabaseWorkspaceManager:
         self.conn = None
 
     def __enter__(self):
-        # FIX: Open connection with strict isolation parameters to resolve engine deadlocks
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=60.0)
-        self.conn.execute("PRAGMA journal_mode=WAL;")
-        self.conn.execute("PRAGMA synchronous=NORMAL;")
-        return self.conn.cursor()
+        try:
+            # FIX: Added strict timeout and concurrency configurations to stop multi-user write deadlocks
+            self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=60.0)
+            self.conn.execute("PRAGMA journal_mode=WAL;")
+            self.conn.execute("PRAGMA synchronous=NORMAL;")
+            return self.conn.cursor()
+        except Exception as conn_error:
+            system_logger.critical(f"DATABASE CONNECTION RUNTIME EXCEPTION: {str(conn_error)}")
+            raise
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is not None:
@@ -74,7 +78,6 @@ def secure_hash_pbkdf2(password, salt_hex):
     salt = bytes.fromhex(salt_hex)
     return hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000).hex()
 
-# FIX: Dropped st.cache_resource here to guarantee synchronization on immediate script deployments
 def init_hardened_db():
     with DatabaseWorkspaceManager() as cursor:
         cursor.execute("""
@@ -121,7 +124,7 @@ def init_hardened_db():
             ]
             cursor.executemany("INSERT INTO farm_clusters (org_id, cluster_name, latitude, longitude, crop_type, acres, expected_yield, market_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", base_clusters)
 
-# Run initialization right away to make sure the tables are active before anything runs
+# CRITICAL FIX: Executing initialization synchronously right at startup to prevent empty schema lookup faults
 init_hardened_db()
 
 # ==========================================
@@ -153,11 +156,9 @@ def fetch_from_local_cache(lat, lon):
 def fetch_weather_intelligence(lat, lon):
     primary_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&forecast_days=14&timezone=Africa/Accra"
     secondary_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&forecast_days=14&models=gfs_seamless&timezone=Africa/Accra"
-
     cached_df, is_fresh = fetch_from_local_cache(lat, lon)
     if cached_df is not None and is_fresh:
         return cached_df, "🟢 MEMORY INSTANCE FRESH (CACHE ACTIVE)"
-
     try:
         res = requests.get(primary_url, timeout=3)
         if res.status_code == 200:
@@ -170,7 +171,6 @@ def fetch_weather_intelligence(lat, lon):
             return df, "🟢 PRIMARY LIVE TELEMETRY"
     except Exception as e:
         system_logger.error(f"Primary Ingestion Fault at ({lat}, {lon}): {str(e)}")
-
     try:
         res = requests.get(secondary_url, timeout=3)
         if res.status_code == 200:
@@ -183,7 +183,6 @@ def fetch_weather_intelligence(lat, lon):
             return df, "🟡 BACKUP LIVE TELEMETRY (NOAA GFS)"
     except Exception as e:
         system_logger.error(f"Secondary Model Ingestion Fault at ({lat}, {lon}): {str(e)}")
-
     if cached_df is not None:
         return cached_df, "🟠 STALE OFFLINE STORAGE ENGINE FALLBACK"
     return None, "🚨 NETWORK DROPOUT CRITICAL"
@@ -197,45 +196,65 @@ def dispatch_twilio_sms_hardened(recipient_phone, message_body):
     from_phone = os.environ.get("TWILIO_NUMBER")
     
     if not all([account_sid, auth_token, from_phone]):
+        system_logger.error("SMS Infrastructure unmapped. Graceful platform degradation active.")
         return False
-
     url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
     payload = {"To": recipient_phone, "From": from_phone, "Body": message_body}
     
-    try:
-        res = requests.post(url, data=payload, auth=(account_sid, auth_token), timeout=5)
-        return res.status_code in [200, 201]
-    except:
-        return False
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            res = requests.post(url, data=payload, auth=(account_sid, auth_token), timeout=5)
+            if res.status_code in [200, 201]:
+                system_logger.info(f"Twilio message successfully broadcast on attempt {attempt + 1}")
+                return True
+        except requests.RequestException as network_error:
+            system_logger.error(f"SMS retry loop exception active ({attempt + 1}/{max_retries}): {str(network_error)}")
+        if attempt < max_retries - 1:
+            time.sleep(2 ** (attempt + 1))
+            
+    return False
 
 def dispatch_smtp_email_hardened(target_email, subject, body_content):
     smtp_server = os.environ.get("SMTP_HOST")
     smtp_port = os.environ.get("SMTP_PORT")
     sender_email = os.environ.get("SMTP_USER")
     sender_password = os.environ.get("SMTP_PASSWORD")
-
     if not all([smtp_server, smtp_port, sender_email, sender_password]):
+        system_logger.error("SMTP Infrastructure unmapped. Graceful platform degradation active.")
         return False
-
     msg = MIMEMultipart()
     msg['From'] = sender_email
     msg['To'] = target_email
     msg['Subject'] = subject
     msg.attach(MIMEText(body_content, 'html'))
-
-    try:
-        with smtplib.SMTP(smtp_server, int(smtp_port), timeout=6) as server:
-            server.starttls()
-            server.login(sender_email, sender_password)
-            server.send_message(msg)
-            return True
-    except:
-        return False
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            with smtplib.SMTP(smtp_server, int(smtp_port), timeout=6) as server:
+                server.starttls()
+                server.login(sender_email, sender_password)
+                server.send_message(msg)
+                return True
+        except Exception as relay_error:
+            system_logger.error(f"Email retry loop exception active ({attempt + 1}/{max_retries}): {str(relay_error)}")
+        if attempt < max_retries - 1:
+            time.sleep(2 ** (attempt + 1))
+            
+    return False
 
 def route_emergency_broadcast(org_id, target_exposure, primary_threat):
     system_logger.critical(f"Risk Threshold Breached for {org_id}. Value At Risk: GH₵ {target_exposure:,.2f}")
     sms_alert_text = f"[CRIP ALERT] Space {org_id} Exposure Cap Breached: GH₵ {target_exposure:,.2f} under threat by {primary_threat}."
-    dispatch_twilio_sms_hardened("+233200000000", sms_alert_text)
+    
+    sms_sent = dispatch_twilio_sms_hardened("+233200000000", sms_alert_text)
+    html_bulletin = f"<html><body><h2 style='color:#991B1B;'>⚠️ Exposure Alert</h2><p>Tenant <strong>{org_id}</strong> value at risk: GH₵ {target_exposure:,.2f}</p></body></html>"
+    email_sent = dispatch_smtp_email_hardened("risk-manager@agricorp.com", f"🚨 CRIP RISK NOTICE: {org_id}", html_bulletin)
+
+    if not sms_sent and not email_sent:
+        st.sidebar.warning("⚠️ Alerts deactivated (Environment links unmapped or unreached).")
+    else:
+        st.sidebar.error("📢 Resilient communication broadcasts successfully dispatched.")
 
 # ==========================================
 # 🔒 LAYER 5: ACCESS CONTROLS GATEWAY
@@ -245,24 +264,19 @@ st.sidebar.title("CRIP Gateway v3.5 Pro")
 
 if "auth_token" not in st.session_state: st.session_state.auth_token = None
 if "account_tier" not in st.session_state: st.session_state.account_tier = "Standard Demo"
-if "org_id" not in st.session_state: st.session_state.org_id = None
-if "user_display" not in st.session_state: st.session_state.user_display = None
-if "user_role" not in st.session_state: st.session_state.user_role = None
-
-def process_user_authentication(username_input, password_input):
-    if not username_input.strip():
-        return None
-    with DatabaseWorkspaceManager() as cursor:
-        cursor.execute("SELECT salt_hex, password_hash, role, org_id FROM users WHERE username=?", (username_input.strip(),))
-        return cursor.fetchone()
 
 if not st.session_state.auth_token:
     st.sidebar.subheader("🔒 Authentication Pool")
-    input_user = st.sidebar.text_input("User ID Tag", key="login_uid")
-    input_pass = st.sidebar.text_input("Key Sequence Token", type="password", key="login_pwd")
+    input_user = st.sidebar.text_input("User ID Tag")
+    input_pass = st.sidebar.text_input("Key Sequence Token", type="password")
     
     if st.sidebar.button("Initialize Platform Engine", use_container_width=True):
-        user_record = process_user_authentication(input_user, input_pass)
+        # FIX: Ensure connection opens and explicitly terminates immediately within context logic
+        user_record = None
+        if input_user.strip():
+            with DatabaseWorkspaceManager() as cursor:
+                cursor.execute("SELECT salt_hex, password_hash, role, org_id FROM users WHERE username=?", (input_user.strip(),))
+                user_record = cursor.fetchone()
         
         if user_record and secure_hash_pbkdf2(input_pass.strip(), user_record[0]) == user_record[1]:
             st.session_state.auth_token = f"JWT_SECURE_{hashlib.md5(input_user.encode()).hexdigest()[:6]}"
@@ -290,6 +304,8 @@ with DatabaseWorkspaceManager() as cursor:
     columns = [col[0] for col in cursor.description]
     tenant_clusters_df = pd.DataFrame(cursor.fetchall(), columns=columns)
 
+active_usage_count = len(tenant_clusters_df)
+portfolio_alerts = []
 global_total_valuation = 0.0
 global_exposure_max = 0.0
 cluster_rankings = []
@@ -325,7 +341,7 @@ if not tenant_clusters_df.empty:
             global_exposure_max += loss_max
             cluster_max_exposure = max(cluster_max_exposure, loss_max)
             active_threat_types.append("Thermal Heat Stress")
-
+            
         cluster_rankings.append({
             "Farm Node Cluster Name": name, "Crop Type": crop, "Valuation (GHS)": asset_val, "Value At Risk (GHS)": cluster_max_exposure, "Network Stream": stream_tag
         })
@@ -348,12 +364,12 @@ with DatabaseWorkspaceManager() as cursor:
     records = cursor.fetchall()
 
 if not records:
-    trend_narrative_label = "⚖️ Baseline Establishing"
+    trend_percentage, trend_narrative_label = 0.0, "⚖️ Baseline Establishing"
 else:
     historic_values = [r[0] for r in records]
     avg_historic_exposure = sum(historic_values) / len(historic_values)
     if avg_historic_exposure == 0:
-        trend_narrative_label = "⚖️ Baseline Stable"
+        trend_percentage, trend_narrative_label = 0.0, "⚖️ Baseline Stable"
     else:
         trend_percentage = ((global_exposure_max - avg_historic_exposure) / avg_historic_exposure) * 100
         trend_narrative_label = f"📈 +{trend_percentage:.1f}% Risk" if trend_percentage > 5.0 else f"📉 {trend_percentage:.1f}% Risk" if trend_percentage < -5.0 else "🔄 Volatility Stable"
@@ -362,7 +378,6 @@ else:
 # 🖥️ LAYER 7: PRESENTATION GRAPHICS ENVIRONMENT
 # ==========================================
 st.title("🌍 Climate Financial Risk Intelligence Platform")
-
 if not tenant_clusters_df.empty:
     dominant_threat_profile = ", ".join(list(set(active_threat_types))) if active_threat_types else "None"
     st.markdown(f"""
@@ -371,7 +386,6 @@ if not tenant_clusters_df.empty:
         <p>{trend_narrative_label} | Threat Vectors: {dominant_threat_profile} (Count: {unique_threat_count})</p>
     </div>
     """, unsafe_allow_html=True)
-
     if global_exposure_max > 100000:
         route_emergency_broadcast(st.session_state.org_id, global_exposure_max, dominant_threat_profile)
 
