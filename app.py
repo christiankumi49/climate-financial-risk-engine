@@ -290,33 +290,34 @@ if not insight_narrative_summary:
 # ==========================================
 def generate_compliance_report_html():
     """Generates an elite corporate layout specification sheet for investor presentations."""
+    current_token = st.session_state.get('auth_token', 'UNAUTHORIZED_SESSION')
     html_payload = f"""
     <html>
     <head>
         <style>
-            body {{ font-family: 'Segoe UI', -apple-system, Arial, sans-serif; margin: 0; padding: 40px; color: #1E293B; background-color: #F8FAFC; }}
-            .container {{ max-width: 1100px; margin: 0 auto; background: #FFFFFF; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border: 1px solid #E2E8F0; }}
-            .header-strip {{ border-left: 6px solid #1E3A8A; padding-left: 20px; margin-bottom: 35px; }}
-            .title {{ font-size: 26px; font-weight: 800; color: #1E3A8A; text-transform: uppercase; letter-spacing: -0.5px; margin: 0; }}
-            .subtitle {{ font-size: 13px; color: #64748B; margin-top: 5px; font-weight: 500; }}
+            body {{ font-family: 'Segoe UI', -apple-system, Arial, sans-serif; margin: 0; padding: 30px; color: #1E293B; background-color: #F8FAFC; }}
+            .container {{ max-width: 1040px; margin: 0 auto; background: #FFFFFF; padding: 35px; border-radius: 8px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); border: 1px solid #E2E8F0; }}
+            .header-strip {{ border-left: 6px solid #1E3A8A; padding-left: 15px; margin-bottom: 30px; }}
+            .title {{ font-size: 24px; font-weight: 800; color: #1E3A8A; text-transform: uppercase; letter-spacing: -0.5px; margin: 0; }}
+            .subtitle {{ font-size: 12px; color: #64748B; margin-top: 5px; font-weight: 500; }}
             
-            .grid {{ display: flex; gap: 20px; margin-bottom: 35px; }}
-            .card {{ flex: 1; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 20px; }}
-            .card-label {{ font-size: 11px; text-transform: uppercase; color: #64748B; font-weight: 700; letter-spacing: 0.5px; }}
-            .card-value {{ font-size: 20px; font-weight: 700; color: #0F172A; margin-top: 8px; }}
+            .grid {{ display: flex; gap: 15px; margin-bottom: 30px; }}
+            .card {{ flex: 1; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 15px; }}
+            .card-label {{ font-size: 10px; text-transform: uppercase; color: #64748B; font-weight: 700; letter-spacing: 0.5px; }}
+            .card-value {{ font-size: 18px; font-weight: 700; color: #0F172A; margin-top: 6px; }}
             
-            h3 {{ font-size: 16px; font-weight: 700; color: #1E3A8A; border-bottom: 1px solid #E2E8F0; padding-bottom: 8px; margin-top: 0; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.3px; }}
+            h3 {{ font-size: 15px; font-weight: 700; color: #1E3A8A; border-bottom: 1px solid #E2E8F0; padding-bottom: 6px; margin-top: 0; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.3px; }}
             
-            .data-table {{ width: 100%; border-collapse: collapse; margin-bottom: 35px; }}
-            .data-table th {{ background-color: #1E3A8A; color: #FFFFFF; padding: 14px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }}
-            .data-table td {{ padding: 14px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #334155; }}
+            .data-table {{ width: 100%; border-collapse: collapse; margin-bottom: 30px; }}
+            .data-table th {{ background-color: #1E3A8A; color: #FFFFFF; padding: 12px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }}
+            .data-table td {{ padding: 12px; border-bottom: 1px solid #E2E8F0; font-size: 12px; color: #334155; }}
             .data-table tr:nth-child(even) {{ background-color: #F8FAFC; }}
             
-            .badge {{ display: inline-block; padding: 4px 8px; font-size: 11px; font-weight: 700; border-radius: 4px; text-transform: uppercase; }}
+            .badge {{ display: inline-block; padding: 3px 6px; font-size: 10px; font-weight: 700; border-radius: 4px; text-transform: uppercase; }}
             .badge-high {{ background-color: #FEE2E2; color: #991B1B; border: 1px solid #FCA5A5; }}
             .badge-stable {{ background-color: #DCFCE7; color: #166534; border: 1px solid #86EFAC; }}
             
-            .footer {{ margin-top: 60px; border-top: 2px solid #E2E8F0; padding-top: 20px; font-size: 11px; color: #94A3B8; text-align: center; line-height: 1.6; }}
+            .footer {{ margin-top: 50px; border-top: 1px solid #E2E8F0; padding-top: 15px; font-size: 11px; color: #94A3B8; text-align: center; line-height: 1.5; }}
         </style>
     </head>
     <body>
@@ -342,7 +343,7 @@ def generate_compliance_report_html():
                 </div>
                 <div class="card">
                     <div class="card-label">Security Clearance Tag</div>
-                    <div class="card-value" style="font-family: monospace; font-size: 15px;">{st.session_state.get('auth_token', 'UNAUTHORIZED')}</div>
+                    <div class="card-value" style="font-family: monospace; font-size: 13px; color: #1E3A8A;">{current_token}</div>
                 </div>
             </div>
 
