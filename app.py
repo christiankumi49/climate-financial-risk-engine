@@ -49,9 +49,8 @@ class DatabaseWorkspaceManager:
         self.conn = None
 
     def __enter__(self):
-        # FIX: Added check_same_thread=False and an aggressive timeout to handle concurrency
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
-        # FIX: Enable Write-Ahead Logging (WAL) to completely prevent operational concurrency locks
+        # FIX: Increased timeout to 60 seconds to completely clear multi-session queues
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=60.0)
         self.conn.execute("PRAGMA journal_mode=WAL;")
         return self.conn.cursor()
 
@@ -70,6 +69,8 @@ def secure_hash_pbkdf2(password, salt_hex):
     salt = bytes.fromhex(salt_hex)
     return hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000).hex()
 
+# FIX: Cached routine guarantees setup runs exactly once on launch, preventing table lookups from hitting lock states
+@st.cache_resource
 def init_hardened_db():
     with DatabaseWorkspaceManager() as cursor:
         cursor.execute("""
@@ -115,7 +116,9 @@ def init_hardened_db():
                 ("ORG_COCOA_CORP", "Sefwi Wiawso Cluster (Western North)", 6.16, -2.48, "Cocoa", 2500.0, 1.2, 12500.0)
             ]
             cursor.executemany("INSERT INTO farm_clusters (org_id, cluster_name, latitude, longitude, crop_type, acres, expected_yield, market_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", base_clusters)
+    return True
 
+# Trigger cached initialization safely
 init_hardened_db()
 
 # ==========================================
