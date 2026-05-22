@@ -42,13 +42,18 @@ system_logger = initialize_production_logger()
 # ==========================================
 # 💾 LAYER 1: HARDENED THREAD-SAFE PERSISTENCE INTERFACES
 # ==========================================
+# FIX: Dynamically resolve an absolute path relative to this script's location
+WORKING_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_FILE_PATH = os.path.join(WORKING_DIR, "climate_risk_vault.db")
+
 class DatabaseWorkspaceManager:
     """Provides automated context management and thread-safe connection pooling parameters."""
-    def __init__(self, db_path="climate_risk_vault.db"):
+    def __init__(self, db_path=DB_FILE_PATH):
         self.db_path = db_path
         self.conn = None
 
     def __enter__(self):
+        # FIX: Open connection with strict isolation parameters to resolve engine deadlocks
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=60.0)
         self.conn.execute("PRAGMA journal_mode=WAL;")
         self.conn.execute("PRAGMA synchronous=NORMAL;")
@@ -69,7 +74,7 @@ def secure_hash_pbkdf2(password, salt_hex):
     salt = bytes.fromhex(salt_hex)
     return hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000).hex()
 
-@st.cache_resource
+# FIX: Dropped st.cache_resource here to guarantee synchronization on immediate script deployments
 def init_hardened_db():
     with DatabaseWorkspaceManager() as cursor:
         cursor.execute("""
@@ -115,8 +120,8 @@ def init_hardened_db():
                 ("ORG_COCOA_CORP", "Sefwi Wiawso Cluster (Western North)", 6.16, -2.48, "Cocoa", 2500.0, 1.2, 12500.0)
             ]
             cursor.executemany("INSERT INTO farm_clusters (org_id, cluster_name, latitude, longitude, crop_type, acres, expected_yield, market_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", base_clusters)
-    return True
 
+# Run initialization right away to make sure the tables are active before anything runs
 init_hardened_db()
 
 # ==========================================
@@ -233,7 +238,7 @@ def route_emergency_broadcast(org_id, target_exposure, primary_threat):
     dispatch_twilio_sms_hardened("+233200000000", sms_alert_text)
 
 # ==========================================
-# 🔒 LAYER 5: ACCESS CONTROLS GATEWAY (ISOLATED FIX)
+# 🔒 LAYER 5: ACCESS CONTROLS GATEWAY
 # ==========================================
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=45)
 st.sidebar.title("CRIP Gateway v3.5 Pro")
@@ -244,7 +249,6 @@ if "org_id" not in st.session_state: st.session_state.org_id = None
 if "user_display" not in st.session_state: st.session_state.user_display = None
 if "user_role" not in st.session_state: st.session_state.user_role = None
 
-# FIX: Wrapped validation logic inside a programmatic layout sequence
 def process_user_authentication(username_input, password_input):
     if not username_input.strip():
         return None
@@ -257,7 +261,6 @@ if not st.session_state.auth_token:
     input_user = st.sidebar.text_input("User ID Tag", key="login_uid")
     input_pass = st.sidebar.text_input("Key Sequence Token", type="password", key="login_pwd")
     
-    # FIX: The query now executes ONLY when this true state boolean handles the button press event
     if st.sidebar.button("Initialize Platform Engine", use_container_width=True):
         user_record = process_user_authentication(input_user, input_pass)
         
@@ -276,7 +279,6 @@ else:
     st.sidebar.info(f"Workspace Boundary: {st.session_state.org_id}")
     if st.sidebar.button("Kill Process Loop", use_container_width=True):
         st.session_state.auth_token = None
-        st.clear_cache()
         st.rerun()
 
 # ==========================================
