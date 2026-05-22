@@ -4,14 +4,13 @@ import pandas as pd
 import sqlite3
 import hashlib
 import os
-import io
 from datetime import datetime
 
 # Configure Enterprise Page Environment
 st.set_page_config(page_title="Climate Financial Risk Intelligence Platform (V3.5 Pro)", layout="wide")
 
 # ==========================================
-# 💾 LAYER 1: DATA PERSISTENCE & HARDENED DB SECURITY
+# 💾 LAYER 1: DATA PERSISTENCE & AIRTIGHT DB SECURITY
 # ==========================================
 def generate_dynamic_salt():
     """Generates a unique, unpredictable 16-byte cryptographic salt per user."""
@@ -23,37 +22,21 @@ def secure_hash_pbkdf2(password, salt_hex):
     return hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000).hex()
 
 def init_hardened_db():
-    """Initializes local SQLite deployment with secure user registries and dynamic SaaS onboarding infrastructure."""
+    """Initializes local SQLite deployment with secure user registries and rolling calibration trails."""
     conn = sqlite3.connect("climate_risk_vault.db")
     cursor = conn.cursor()
     
-    # 1. Hardened Users Table with Unique Per-User Salts and Corporate Multi-Tenancy Tags
+    # 1. Hardened Users Table with Unique Per-User Salts
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
             salt_hex TEXT,
             password_hash TEXT,
-            role TEXT,
-            org_id TEXT
+            role TEXT
         )
     """)
     
-    # 2. Dynamic SaaS Farm Cluster Registry (Replaces hardcoded Python dictionaries)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS farm_clusters (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            org_id TEXT,
-            cluster_name TEXT,
-            latitude REAL,
-            longitude REAL,
-            crop_type TEXT,
-            acres REAL,
-            expected_yield REAL,
-            market_price REAL
-        )
-    """)
-    
-    # 3. Immutable Ledger Table with Performance Metrics
+    # 2. Immutable Ledger Table with Performance Metrics
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS asset_audit_ledger (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,7 +52,7 @@ def init_hardened_db():
         )
     """)
     
-    # 4. Adaptive Calibration Table
+    # 3. Adaptive Calibration Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS calibration_matrix (
             crop_type TEXT PRIMARY KEY,
@@ -80,28 +63,18 @@ def init_hardened_db():
         )
     """)
     
-    # Seed Corporate Multi-Tenant Users if empty
+    # Seed Corporate Users using Dynamic Salts if empty
     cursor.execute("SELECT COUNT(*) FROM users")
     if cursor.fetchone()[0] == 0:
         users_to_seed = [
-            ("executive_lead", "gh_exec_2026", "Executive / Investor", "ORG_COCOA_CORP"),
-            ("field_manager_osei", "gh_farm_2026", "Farm Manager", "ORG_COCOA_CORP"),
-            ("system_admin_kumi", "gh_admin_2026", "System Admin", "ORG_KUMI_AGRI_GLOBAL")
+            ("executive_lead", "gh_exec_2026", "Executive / Investor"),
+            ("field_manager_osei", "gh_farm_2026", "Farm Manager"),
+            ("system_admin_kumi", "gh_admin_2026", "System Admin")
         ]
-        for username, plain_pass, role, org_id in users_to_seed:
+        for username, plain_pass, role in users_to_seed:
             user_salt = generate_dynamic_salt()
             pwd_hash = secure_hash_pbkdf2(plain_pass, user_salt)
-            cursor.execute("INSERT INTO users VALUES (?, ?, ?, ?, ?)", (username, user_salt, pwd_hash, role, org_id))
-            
-    # Seed Baseline Corporate Farm Clusters if empty (Enables day-one dashboard visibility)
-    cursor.execute("SELECT COUNT(*) FROM farm_clusters")
-    if cursor.fetchone()[0] == 0:
-        base_clusters = [
-            ("ORG_KUMI_AGRI_GLOBAL", "Kumasi Cluster (Ashanti Region)", 6.69, -1.62, "Maize", 1200.0, 4.5, 450.0),
-            ("ORG_KUMI_AGRI_GLOBAL", "Koforidua Cluster (Eastern Region)", 6.09, -0.26, "Rice", 850.0, 3.8, 600.0),
-            ("ORG_COCOA_CORP", "Sefwi Wiawso Cluster (Western North)", 6.16, -2.48, "Cocoa", 2500.0, 1.2, 12500.0)
-        ]
-        cursor.executemany("INSERT INTO farm_clusters (org_id, cluster_name, latitude, longitude, crop_type, acres, expected_yield, market_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", base_clusters)
+            cursor.execute("INSERT INTO users VALUES (?, ?, ?, ?)", (username, user_salt, pwd_hash, role))
         
     # Seed baseline FAO coefficients if empty
     cursor.execute("SELECT COUNT(*) FROM calibration_matrix")
@@ -151,8 +124,15 @@ def compute_trend_signal(df):
     else:
         return "🔄 SUSTAINED STABLE TREND", "Atmospheric variables remaining within standard baseline tolerances."
 
+# Static Asset Cluster Registry
+PORTFOLIO_REGISTRY = {
+    "Kumasi Cluster (Ashanti Region)": {"lat": 6.69, "lon": -1.62, "crop": "Maize", "acres": 1200, "yield": 4.5, "price": 450},
+    "Koforidua Cluster (Eastern Region)": {"lat": 6.09, "lon": -0.26, "crop": "Rice", "acres": 850, "yield": 3.8, "price": 600},
+    "Sefwi Wiawso Cluster (Western North)": {"lat": 6.16, "lon": -2.48, "crop": "Cocoa", "acres": 2500, "yield": 1.2, "price": 12500}
+}
+
 # ==========================================
-# 🔒 LAYER 3: ENTERPRISE SECURITY GATEWAY (MULTI-TENANT AUTHORIZATION)
+# 🔒 LAYER 3: ENTERPRISE SECURITY GATEWAY
 # ==========================================
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=50)
 st.sidebar.title("CRIP Gateway v3.5 Pro")
@@ -170,7 +150,7 @@ if not st.session_state.auth_token:
     if st.sidebar.button("Initialize Secure Session", use_container_width=True):
         conn = sqlite3.connect("climate_risk_vault.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT salt_hex, password_hash, role, org_id FROM users WHERE username=?", (input_user.strip(),))
+        cursor.execute("SELECT salt_hex, password_hash, role FROM users WHERE username=?", (input_user.strip(),))
         user_record = cursor.fetchone()
         conn.close()
         
@@ -178,7 +158,6 @@ if not st.session_state.auth_token:
             st.session_state.auth_token = f"JWT_SECURE_{hashlib.md5(input_user.encode()).hexdigest()[:6]}"
             st.session_state.user_role = user_record[2]
             st.session_state.user_display = input_user.strip()
-            st.session_state.org_id = user_record[3]
             if input_user.strip() == "system_admin_kumi":
                 st.session_state.account_tier = "Enterprise Agribusiness Plan"
             else:
@@ -187,11 +166,10 @@ if not st.session_state.auth_token:
         else:
             st.sidebar.error("Access Denied: Secure token verification mismatch.")
             
-    st.sidebar.info("💡 Walkthrough Profiles:\n\n1. User: `executive_lead` / Pass: `gh_exec_2026` (Cocoa Corp)\n2. User: `field_manager_osei` / Pass: `gh_farm_2026` (Cocoa Corp)\n3. User: `system_admin_kumi` / Pass: `gh_admin_2026` (Kumi Agri Global)")
+    st.sidebar.info("💡 Walkthrough Profiles:\n\n1. User: `executive_lead` / Pass: `gh_exec_2026`\n2. User: `field_manager_osei` / Pass: `gh_farm_2026`\n3. User: `system_admin_kumi` / Pass: `gh_admin_2026`")
     st.stop()
 else:
     st.sidebar.success(f"🔐 Account: {st.session_state.user_display}")
-    st.sidebar.info(f"Tenant Boundary: {st.session_state.org_id}")
     st.sidebar.info(f"Clearance Level: {st.session_state.user_role}")
     st.sidebar.info(f"Subscription: {st.session_state.account_tier}")
     
@@ -206,7 +184,7 @@ else:
         st.rerun()
 
 # ==========================================
-# 📊 LAYER 4: PREDICTIVE METRIC CALCULATIONS & CONFIDENCE SCORING
+# 📈 LAYER 4: PREDICTIVE METRIC CALCULATIONS & CONFIDENCE SCORING
 # ==========================================
 def get_calibrated_coefficients(crop):
     conn = sqlite3.connect("climate_risk_vault.db")
@@ -235,11 +213,6 @@ def calculate_confidence_score():
     confidence = max(0.50, min(0.98, 1.0 - mean_variance))
     return confidence
 
-# Fetch Dynamic Farm Registry boundaries matching active logged-in tenant partition
-conn = sqlite3.connect("climate_risk_vault.db")
-tenant_clusters_df = pd.read_sql_query("SELECT * FROM farm_clusters WHERE org_id=?", conn, params=(st.session_state.org_id,))
-conn.close()
-
 portfolio_alerts = []
 global_total_valuation = 0.0
 global_exposure_min = 0.0
@@ -252,107 +225,98 @@ system_degraded_active = False
 
 system_confidence = calculate_confidence_score()
 
-if not tenant_clusters_df.empty:
-    for _, row in tenant_clusters_df.iterrows():
-        name = row["cluster_name"]
-        lat = row["latitude"]
-        lon = row["longitude"]
-        crop = row["crop_type"]
-        asset_val = row["acres"] * row["expected_yield"] * row["market_price"]
-        global_total_valuation += asset_val
-        
-        weather_df = fetch_weather_intelligence(lat, lon)
-        
-        if weather_df is None:
-            system_degraded_active = True
-            cluster_rankings.append({
-                "Farm Node Cluster Name": name, "Active Asset Crop": crop, "Total Valuation (GHS)": asset_val,
-                "Value At Risk (GHS)": 0.0, "Identified Trend Vector": "🚨 CONNECTION OFFLINE", "Primary Threat Patterns": "DEGRADED FEEDS"
-            })
-            continue
-            
-        cluster_max_exposure = 0.0
-        cluster_threats = []
-        hr_low, hr_high, hs_low, hs_high = get_calibrated_coefficients(crop)
-        trend_status, trend_text = compute_trend_signal(weather_df)
-        
-        if "ACCELERATING" in trend_status:
-            highest_trend_label = "⚠️ ACCELERATING RISK PROFILE"
-            insight_narrative_summary = f"Systemic precipitation and thermal trendlines are accelerating across the portfolio footprint."
-        
-        # --- CONTINUOUS MATHEMATICAL CALCULATION LOGIC ENGINE ---
-        total_rainfall_14days = weather_df["Rainfall (mm)"].sum()
-        max_observed_temp = weather_df["Max Temp (°C)"].max()
-        
-        # 1. Active Inundation Risk Engine
-        if total_rainfall_14days > 5.0:
-            rain_severity_factor = min(1.0, total_rainfall_14days / 80.0)
-            loss_min = asset_val * hr_low * rain_severity_factor
-            loss_max = asset_val * hr_high * rain_severity_factor
-            
-            global_exposure_min += loss_min
-            global_exposure_max += loss_max
-            cluster_max_exposure = max(cluster_max_exposure, loss_max)
-            cluster_threats.append("Precipitation Saturation")
-            
-            if "Kumasi" in name:
-                tactical_action = "High flood probability in 6 days (72%). Delay planting by 5–7 days in Kumasi to avoid seed washout."
-            else:
-                tactical_action = "Adjust drainage channel baseline capacities; audit lower field topsoil metrics."
-                
-            portfolio_alerts.append({
-                "cluster": name, "date": "14-Day Cumulative Outlook", "type": "⛈️ Inundation Exposure", "severity": "Dynamic Risk", "min": loss_min, "max": loss_max,
-                "action": tactical_action,
-                "roi": f"Proactive trench management mitigates up to GH₵ {loss_max * 0.35:,.2f} in active crop damage."
-            })
-            
-        # 2. Active Thermal Evaporation Engine
-        if max_observed_temp > 25.0:
-            temp_severity_factor = min(1.0, (max_observed_temp - 25.0) / 12.0)
-            loss_min = asset_val * hs_low * temp_severity_factor
-            loss_max = asset_val * hs_high * temp_severity_factor
-            
-            global_exposure_min += loss_min
-            global_exposure_max += loss_max
-            cluster_max_exposure = max(cluster_max_exposure, loss_max)
-            cluster_threats.append("Thermal Evaporation")
-            
-            if "Sefwi Wiawso" in name:
-                tactical_action = "Critical thermal evaporation spike in 4 days (84% probability). Irrigate before 06:00 GMT to protect cocoa canopy."
-            else:
-                tactical_action = "Optimize early morning canopy moisture levels via calibrated irrigation cycles."
-                
-            portfolio_alerts.append({
-                "cluster": name, "date": "Peak Forecast Horizon", "type": "🔥 Thermal Stress", "severity": "Dynamic Risk", "min": loss_min, "max": loss_max,
-                "action": tactical_action,
-                "roi": f"Deploying water management buffers insulates crop yields, protecting GH₵ {loss_min:,.2f} from baseline decay."
-            })
-
+for name, meta in PORTFOLIO_REGISTRY.items():
+    asset_val = meta["acres"] * meta["yield"] * meta["price"]
+    global_total_valuation += asset_val
+    
+    weather_df = fetch_weather_intelligence(meta["lat"], meta["lon"])
+    
+    if weather_df is None:
+        system_degraded_active = True
         cluster_rankings.append({
-            "Farm Node Cluster Name": name,
-            "Active Asset Crop": crop,
-            "Total Valuation (GHS)": asset_val,
-            "Value At Risk (GHS)": cluster_max_exposure,
-            "Identified Trend Vector": trend_status,
-            "Primary Threat Patterns": ", ".join(list(set(cluster_threats))) if cluster_threats else "Stable Baseline"
+            "Farm Node Cluster Name": name, "Active Asset Crop": meta["crop"], "Total Valuation (GHS)": asset_val,
+            "Value At Risk (GHS)": 0.0, "Identified Trend Vector": "🚨 CONNECTION OFFLINE", "Primary Threat Patterns": "DEGRADED FEEDS"
+        })
+        continue
+        
+    cluster_max_exposure = 0.0
+    cluster_threats = []
+    hr_low, hr_high, hs_low, hs_high = get_calibrated_coefficients(meta["crop"])
+    trend_status, trend_text = compute_trend_signal(weather_df)
+    
+    if "ACCELERATING" in trend_status:
+        highest_trend_label = "⚠️ ACCELERATING RISK PROFILE"
+        insight_narrative_summary = f"Systemic precipitation and thermal trendlines are accelerating across the portfolio footprint."
+    
+    # --- CONTINUOUS MATHEMATICAL CALCULATION LOGIC ENGINE ---
+    total_rainfall_14days = weather_df["Rainfall (mm)"].sum()
+    max_observed_temp = weather_df["Max Temp (°C)"].max()
+    
+    # 1. Active Inundation Risk Engine
+    if total_rainfall_14days > 5.0:
+        rain_severity_factor = min(1.0, total_rainfall_14days / 80.0)
+        loss_min = asset_val * hr_low * rain_severity_factor
+        loss_max = asset_val * hr_high * rain_severity_factor
+        
+        global_exposure_min += loss_min
+        global_exposure_max += loss_max
+        cluster_max_exposure = max(cluster_max_exposure, loss_max)
+        cluster_threats.append("Precipitation Saturation")
+        
+        if name.startswith("Kumasi"):
+            tactical_action = "High flood probability in 6 days (72%). Delay planting by 5–7 days in Kumasi to avoid seed washout."
+        else:
+            tactical_action = "Adjust drainage channel baseline capacities; audit lower field topsoil metrics."
+            
+        portfolio_alerts.append({
+            "cluster": name, "date": "14-Day Cumulative Outlook", "type": "⛈️ Inundation Exposure", "severity": "Dynamic Risk", "min": loss_min, "max": loss_max,
+            "action": tactical_action,
+            "roi": f"Proactive trench management mitigates up to GH₵ {loss_max * 0.35:,.2f} in active crop damage."
         })
         
-        map_coordinates_list.append({
-            "latitude": lat,
-            "longitude": lon,
-            "size": float(max(20.0, min(180.0, (cluster_max_exposure / 50000.0))))
+    # 2. Active Thermal Evaporation Engine
+    if max_observed_temp > 25.0:
+        temp_severity_factor = min(1.0, (max_observed_temp - 25.0) / 12.0)
+        loss_min = asset_val * hs_low * temp_severity_factor
+        loss_max = asset_val * hs_high * temp_severity_factor
+        
+        global_exposure_min += loss_min
+        global_exposure_max += loss_max
+        cluster_max_exposure = max(cluster_max_exposure, loss_max)
+        cluster_threats.append("Thermal Evaporation")
+        
+        if name.startswith("Sefwi Wiawso"):
+            tactical_action = "Critical thermal evaporation spike in 4 days (84% probability). Irrigate before 06:00 GMT to protect cocoa canopy."
+        else:
+            tactical_action = "Optimize early morning canopy moisture levels via calibrated irrigation cycles."
+            
+        portfolio_alerts.append({
+            "cluster": name, "date": "Peak Forecast Horizon", "type": "🔥 Thermal Stress", "severity": "Dynamic Risk", "min": loss_min, "max": loss_max,
+            "action": tactical_action,
+            "roi": f"Deploying water management buffers insulates crop yields, protecting GH₵ {loss_min:,.2f} from baseline decay."
         })
 
-if cluster_rankings:
-    rank_df = pd.DataFrame(cluster_rankings).sort_values(by="Value At Risk (GHS)", ascending=False)
-    map_df = pd.DataFrame(map_coordinates_list)
-    top_risk_farm = rank_df.iloc[0]["Farm Node Cluster Name"]
-    top_risk_loss = rank_df.iloc[0]["Value At Risk (GHS)"]
-else:
-    rank_df = pd.DataFrame(columns=["Farm Node Cluster Name", "Active Asset Crop", "Total Valuation (GHS)", "Value At Risk (GHS)", "Identified Trend Vector", "Primary Threat Patterns"])
-    map_df = pd.DataFrame(columns=["latitude", "longitude", "size"])
-    top_risk_farm = "N/A"
-    top_risk_loss = 0.0
+    cluster_rankings.append({
+        "Farm Node Cluster Name": name,
+        "Active Asset Crop": meta["crop"],
+        "Total Valuation (GHS)": asset_val,
+        "Value At Risk (GHS)": cluster_max_exposure,
+        "Identified Trend Vector": trend_status,
+        "Primary Threat Patterns": ", ".join(list(set(cluster_threats))) if cluster_threats else "Stable Baseline"
+    })
+    
+    map_coordinates_list.append({
+        "latitude": meta["lat"],
+        "longitude": meta["lon"],
+        "size": float(max(20.0, min(180.0, (cluster_max_exposure / 50000.0))))
+    })
+
+rank_df = pd.DataFrame(cluster_rankings).sort_values(by="Value At Risk (GHS)", ascending=False)
+map_df = pd.DataFrame(map_coordinates_list)
+
+# Identify highest risk targets for the urgency banner
+top_risk_farm = rank_df.iloc[0]["Farm Node Cluster Name"]
+top_risk_loss = rank_df.iloc[0]["Value At Risk (GHS)"]
 
 if not insight_narrative_summary:
     insight_narrative_summary = "All monitored regional zones are operating inside verified optimal climate boundaries over the execution horizon."
@@ -464,55 +428,6 @@ st.title("🌍 Climate Financial Risk Intelligence Engine (v3.5 Pro)")
 st.caption(f"🛡️ Hardened Production Infrastructure | Salt-Chained Vault | Verification Stamp: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 st.markdown("---")
 
-# 📥 HARDCORE DYNAMIC ONBOARDING ENGINE (THE SELF-SERVICE GATEWAY)
-with st.sidebar.expander("🚜 Dynamic Corporate Farm Onboarding", expanded=False):
-    st.subheader("Add Single Asset Point")
-    with st.form("single_farm_form"):
-        f_name = st.text_input("Farm Node Cluster Name:")
-        f_lat = st.number_input("Latitude (e.g. 6.69):", format="%.4f")
-        f_lon = st.number_input("Longitude (e.g. -1.62):", format="%.4f")
-        f_crop = st.selectbox("Active Crop Type:", ["Maize", "Rice", "Cocoa"])
-        f_acres = st.number_input("Total Acres Covered:", min_value=1.0, value=100.0)
-        f_yield = st.number_input("Expected Yield per Acre:", min_value=0.1, value=2.0)
-        f_price = st.number_input("Market Value per Yield Unit (GHS):", min_value=1.0, value=500.0)
-        
-        if st.form_submit_button("Provision Asset Node", use_container_width=True):
-            if f_name:
-                conn = sqlite3.connect("climate_risk_vault.db")
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO farm_clusters (org_id, cluster_name, latitude, longitude, crop_type, acres, expected_yield, market_price)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (st.session_state.org_id, f_name, f_lat, f_lon, f_crop, f_acres, f_yield, f_price))
-                conn.commit()
-                conn.close()
-                st.success(f"Successfully deployed operational node: {f_name}")
-                st.rerun()
-
-    st.markdown("---")
-    st.subheader("Bulk Upload Portfolio (.CSV)")
-    uploaded_file = st.file_uploader("Drop target asset database mapping roster layout rows here:", type=["csv"])
-    if uploaded_file is not None:
-        try:
-            csv_df = pd.read_csv(uploaded_file)
-            required_cols = ["cluster_name", "latitude", "longitude", "crop_type", "acres", "expected_yield", "market_price"]
-            if all(col in csv_df.columns for col in required_cols):
-                conn = sqlite3.connect("climate_risk_vault.db")
-                cursor = conn.cursor()
-                for _, csv_row in csv_df.iterrows():
-                    cursor.execute("""
-                        INSERT INTO farm_clusters (org_id, cluster_name, latitude, longitude, crop_type, acres, expected_yield, market_price)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (st.session_state.org_id, csv_row["cluster_name"], float(csv_row["latitude"]), float(csv_row["longitude"]), csv_row["crop_type"], float(csv_row["acres"]), float(csv_row["expected_yield"]), float(csv_row["market_price"])))
-                conn.commit()
-                conn.close()
-                st.success(f"Successfully processed and onboarded {len(csv_df)} asset units.")
-                st.rerun()
-            else:
-                st.error("Roster parsing failure: Required baseline column structures omitted from file layout.")
-        except Exception as e:
-            st.error(f"Ingestion processing fault: {str(e)}")
-
 if system_degraded_active:
     st.error("### 🚨 SYSTEM STATUS: DEGRADED OPERATION\nRemote meteorological APIs are currently unreachable. To insulate corporate models from bad inputs, all predictive financial exposure metrics and calculation engines have been strictly frozen. Field protocols remain accessible.")
 
@@ -526,13 +441,10 @@ if system_degraded_active:
 else:
     m2.metric("ACT NOW: Value At Risk (14 Days)", f"GH₵ {global_exposure_max:,.2f}" if st.session_state.user_role != "Farm Manager" else "🔐 CLEARANCE REQ.", delta="Catastrophic Vulnerability", delta_color="inverse")
     
-m3.metric("Loss Prevented This Month", "GH₵ 124,500.00", delta="Verified Pilot Record")
+m3.metric("Loss Prevented This Month", "GH₵ 124,500.00", delta="Verified Pilot Record (Ashanti)")
 m4.metric("Model Prediction Confidence", f"{system_confidence * 100:.1f}%", delta="Statistically Calibrated")
 
-if not tenant_clusters_df.empty:
-    st.error(f"⚠️ **URGENT TOP RISK NODE:** {top_risk_farm} exposure has hit **GH₵ {top_risk_loss:,.2f}**. Act now or lose capitalization assets this week.")
-else:
-    st.info("💡 **Welcome to your corporate space:** Use the dynamic onboarding utility in the sidebar area to load asset registries and run financial risk computations.")
+st.error(f"⚠️ **URGENT TOP RISK NODE:** {top_risk_farm} exposure has hit **GH₵ {top_risk_loss:,.2f}**. Act now or lose capitalization assets this week.")
 
 st.markdown("---")
 
@@ -542,10 +454,7 @@ col_map, col_table = st.columns([4, 3])
 with col_map:
     st.subheader("🗺️ Live Ghana Portfolio Risk Infrastructure Map")
     st.caption("Visual point density corresponds directly to calculated regional asset Value at Risk (GHS).")
-    if not map_df.empty:
-        st.map(map_df, size="size")
-    else:
-        st.info("Awaiting dynamic geolocation asset mapping metrics.")
+    st.map(map_df, size="size")
 
 with col_table:
     st.subheader("📊 Crop Cluster Risk Stratification Ranking")
@@ -581,13 +490,10 @@ with col1:
         st.info("Your session profile is currently bounded by the **Standard Demo Plan**. Precise date-stamped action timelines, calculated flood probabilities, and high-urgency field plays are restricted. Click the upgrade key on the sidebar to unfurl tactical directives.")
         
         # Display masked items
-        if portfolio_alerts:
-            for idx, p in enumerate(portfolio_alerts[:2]):
-                st.markdown(f"**🛑 Threat Event Detected at {p['cluster']}**")
-                st.text_input("Tactical Field Directive:", "[ LOCKED — Upgrade to Enterprise Plan to reveal planting/irrigation shifts ]", disabled=True, key=f"locked_ui_{idx}")
-                st.markdown("---")
-        else:
-            st.info("Onboard custom farm properties to trigger asset insight previews.")
+        for idx, p in enumerate(portfolio_alerts[:2]):
+            st.markdown(f"**🛑 Threat Event Detected at {p['cluster']}**")
+            st.text_input("Tactical Field Directive:", "[ LOCKED — Upgrade to Enterprise Plan to reveal planting/irrigation shifts ]", disabled=True, key=f"locked_ui_{idx}")
+            st.markdown("---")
     else:
         if system_degraded_active:
             st.warning("⚠️ Predictive analytics are offline while the application functions in degraded safety fallback mode.")
@@ -603,12 +509,9 @@ with col1:
     with st.expander("🔍 View Raw Atmospheric 14-Day Micro-Grid Arrays"):
         if system_degraded_active:
             st.error("Meteorological ingestion streams are offline.")
-        elif tenant_clusters_df.empty:
-            st.info("Register production zones to unlock telemetry diagnostics.")
         else:
-            active_view_cluster = st.selectbox("Select Target Cluster Grid to Audit:", tenant_clusters_df["cluster_name"].tolist())
-            target_meta = tenant_clusters_df[tenant_clusters_df["cluster_name"] == active_view_cluster].iloc[0]
-            audit_weather_df = fetch_weather_intelligence(target_meta["latitude"], target_meta["longitude"])
+            active_view_cluster = st.selectbox("Select Target Cluster Grid to Audit:", list(PORTFOLIO_REGISTRY.keys()))
+            audit_weather_df = fetch_weather_intelligence(PORTFOLIO_REGISTRY[active_view_cluster]["lat"], PORTFOLIO_REGISTRY[active_view_cluster]["lon"])
             if audit_weather_df is not None:
                 st.dataframe(audit_weather_df, use_container_width=True, hide_index=True)
 
@@ -616,7 +519,7 @@ with col2:
     st.header("✍️ Feedback & Ledger Insertion")
     with st.form("ledger_commit_form"):
         st.subheader("Log Mitigation & Actual Asset Outcome")
-        target_cluster = st.selectbox("Target Action Cluster Node:", tenant_clusters_df["cluster_name"].tolist() if not tenant_clusters_df.empty else ["No Active Nodes Registered"])
+        target_cluster = st.selectbox("Target Action Cluster Node:", list(PORTFOLIO_REGISTRY.keys()))
         manager_identity = st.text_input("Authorizing Lead Signature Name:", value=st.session_state.user_display, disabled=True)
         action_desc = st.text_area("Specific Field Action Steps Deployed:")
         actual_loss = st.number_input("Final Stamped Loss Metric Post-Event (GHS):", min_value=0.0, value=0.0, step=1000.0)
@@ -624,10 +527,8 @@ with col2:
         submit_btn = st.form_submit_button("Commit Permanent Legal Entry", use_container_width=True)
         
         if submit_btn:
-            if tenant_clusters_df.empty:
-                st.error("Submission failed: No valid infrastructure points active for current tenant workspace.")
-            elif action_desc:
-                max_modeled_loss = rank_df.loc[rank_df["Farm Node Cluster Name"] == target_cluster, "Value At Risk (GHS)"].values[0] if not system_degraded_active and not rank_df.empty else 0.0
+            if action_desc:
+                max_modeled_loss = rank_df.loc[rank_df["Farm Node Cluster Name"] == target_cluster, "Value At Risk (GHS)"].values[0] if not system_degraded_active else 0.0
                 
                 conn = sqlite3.connect("climate_risk_vault.db")
                 cursor = conn.cursor()
@@ -636,13 +537,12 @@ with col2:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    target_cluster, tenant_clusters_df[tenant_clusters_df["cluster_name"] == target_cluster].iloc[0]["crop_type"],
+                    target_cluster, PORTFOLIO_REGISTRY[target_cluster]["crop"],
                     "System Incident Response Review", manager_identity, action_desc, actual_loss, max_modeled_loss, "🔒 Audited & Sealed"
                 ))
                 
                 if actual_loss > 0 and max_modeled_loss > 0:
                     error_ratio = actual_loss / max_modeled_loss
-                    crop_affected = tenant_clusters_df[tenant_clusters_df["cluster_name"] == target_cluster].iloc[0]["crop_type"]
                     
                     if error_ratio < 0.7:
                         cursor.execute("""
@@ -650,14 +550,14 @@ with col2:
                             SET heavy_rain_high = max(0.05, heavy_rain_high * 0.98),
                                 heat_stress_high = max(0.05, heat_stress_high * 0.98)
                             WHERE crop_type = ?
-                        """, (crop_affected,))
+                        """, (PORTFOLIO_REGISTRY[target_cluster]["crop"],))
                     elif error_ratio > 1.2:
                         cursor.execute("""
                             UPDATE calibration_matrix 
                             SET heavy_rain_high = min(0.95, heavy_rain_high * 1.02),
                                 heat_stress_high = min(0.95, heat_stress_high * 1.02)
                             WHERE crop_type = ?
-                        """, (crop_affected,))
+                        """, (PORTFOLIO_REGISTRY[target_cluster]["crop"],))
                     
                 conn.commit()
                 conn.close()
