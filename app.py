@@ -49,7 +49,6 @@ class DatabaseWorkspaceManager:
         self.conn = None
 
     def __enter__(self):
-        # FIX: Elevated transaction parameters and isolated read/write handling via explicit WAL enforcement
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=60.0)
         self.conn.execute("PRAGMA journal_mode=WAL;")
         self.conn.execute("PRAGMA synchronous=NORMAL;")
@@ -118,7 +117,6 @@ def init_hardened_db():
             cursor.executemany("INSERT INTO farm_clusters (org_id, cluster_name, latitude, longitude, crop_type, acres, expected_yield, market_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", base_clusters)
     return True
 
-# Trigger cached initialization safely
 init_hardened_db()
 
 # ==========================================
@@ -155,7 +153,6 @@ def fetch_weather_intelligence(lat, lon):
     if cached_df is not None and is_fresh:
         return cached_df, "🟢 MEMORY INSTANCE FRESH (CACHE ACTIVE)"
 
-    # Primary API Call
     try:
         res = requests.get(primary_url, timeout=3)
         if res.status_code == 200:
@@ -169,7 +166,6 @@ def fetch_weather_intelligence(lat, lon):
     except Exception as e:
         system_logger.error(f"Primary Ingestion Fault at ({lat}, {lon}): {str(e)}")
 
-    # Secondary API Call
     try:
         res = requests.get(secondary_url, timeout=3)
         if res.status_code == 200:
@@ -196,25 +192,16 @@ def dispatch_twilio_sms_hardened(recipient_phone, message_body):
     from_phone = os.environ.get("TWILIO_NUMBER")
     
     if not all([account_sid, auth_token, from_phone]):
-        system_logger.error("SMS Infrastructure unmapped. Graceful platform degradation active.")
         return False
 
     url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
     payload = {"To": recipient_phone, "From": from_phone, "Body": message_body}
     
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            res = requests.post(url, data=payload, auth=(account_sid, auth_token), timeout=5)
-            if res.status_code in [200, 201]:
-                system_logger.info(f"Twilio message successfully broadcast on attempt {attempt + 1}")
-                return True
-        except requests.RequestException as network_error:
-            system_logger.error(f"SMS retry loop exception active ({attempt + 1}/{max_retries}): {str(network_error)}")
-        if attempt < max_retries - 1:
-            time.sleep(2 ** (attempt + 1))
-            
-    return False
+    try:
+        res = requests.post(url, data=payload, auth=(account_sid, auth_token), timeout=5)
+        return res.status_code in [200, 201]
+    except:
+        return False
 
 def dispatch_smtp_email_hardened(target_email, subject, body_content):
     smtp_server = os.environ.get("SMTP_HOST")
@@ -223,7 +210,6 @@ def dispatch_smtp_email_hardened(target_email, subject, body_content):
     sender_password = os.environ.get("SMTP_PASSWORD")
 
     if not all([smtp_server, smtp_port, sender_email, sender_password]):
-        system_logger.error("SMTP Infrastructure unmapped. Graceful platform degradation active.")
         return False
 
     msg = MIMEMultipart()
@@ -232,37 +218,22 @@ def dispatch_smtp_email_hardened(target_email, subject, body_content):
     msg['Subject'] = subject
     msg.attach(MIMEText(body_content, 'html'))
 
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            with smtplib.SMTP(smtp_server, int(smtp_port), timeout=6) as server:
-                server.starttls()
-                server.login(sender_email, sender_password)
-                server.send_message(msg)
-                return True
-        except Exception as relay_error:
-            system_logger.error(f"Email retry loop exception active ({attempt + 1}/{max_retries}): {str(relay_error)}")
-        if attempt < max_retries - 1:
-            time.sleep(2 ** (attempt + 1))
-            
-    return False
+    try:
+        with smtplib.SMTP(smtp_server, int(smtp_port), timeout=6) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.send_message(msg)
+            return True
+    except:
+        return False
 
 def route_emergency_broadcast(org_id, target_exposure, primary_threat):
     system_logger.critical(f"Risk Threshold Breached for {org_id}. Value At Risk: GH₵ {target_exposure:,.2f}")
     sms_alert_text = f"[CRIP ALERT] Space {org_id} Exposure Cap Breached: GH₵ {target_exposure:,.2f} under threat by {primary_threat}."
-    
-    sms_sent = dispatch_twilio_sms_hardened("+233200000000", sms_alert_text)
-    
-    html_bulletin = f"<html><body><h2 style='color:#991B1B;'>⚠️ Exposure Alert</h2><p>Tenant <strong>{org_id}</strong> value at risk: GH₵ {target_exposure:,.2f}</p></body></html>"
-    email_sent = dispatch_smtp_email_hardened("risk-manager@agricorp.com", f"🚨 CRIP RISK NOTICE: {org_id}", html_bulletin)
-
-    if not sms_sent and not email_sent:
-        st.sidebar.warning("⚠️ Alerts deactivated (Environment links unmapped or unreached).")
-    else:
-        st.sidebar.error("📢 Resilient communication broadcasts successfully dispatched.")
+    dispatch_twilio_sms_hardened("+233200000000", sms_alert_text)
 
 # ==========================================
-# 🔒 LAYER 5: ACCESS CONTROLS GATEWAY
+# 🔒 LAYER 5: ACCESS CONTROLS GATEWAY (ISOLATED FIX)
 # ==========================================
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=45)
 st.sidebar.title("CRIP Gateway v3.5 Pro")
@@ -273,17 +244,22 @@ if "org_id" not in st.session_state: st.session_state.org_id = None
 if "user_display" not in st.session_state: st.session_state.user_display = None
 if "user_role" not in st.session_state: st.session_state.user_role = None
 
+# FIX: Wrapped validation logic inside a programmatic layout sequence
+def process_user_authentication(username_input, password_input):
+    if not username_input.strip():
+        return None
+    with DatabaseWorkspaceManager() as cursor:
+        cursor.execute("SELECT salt_hex, password_hash, role, org_id FROM users WHERE username=?", (username_input.strip(),))
+        return cursor.fetchone()
+
 if not st.session_state.auth_token:
     st.sidebar.subheader("🔒 Authentication Pool")
-    input_user = st.sidebar.text_input("User ID Tag")
-    input_pass = st.sidebar.text_input("Key Sequence Token", type="password")
+    input_user = st.sidebar.text_input("User ID Tag", key="login_uid")
+    input_pass = st.sidebar.text_input("Key Sequence Token", type="password", key="login_pwd")
     
+    # FIX: The query now executes ONLY when this true state boolean handles the button press event
     if st.sidebar.button("Initialize Platform Engine", use_container_width=True):
-        # FIX: Explicit query separation inside the block ensures data fetches close out instantly
-        user_record = None
-        with DatabaseWorkspaceManager() as cursor:
-            cursor.execute("SELECT salt_hex, password_hash, role, org_id FROM users WHERE username=?", (input_user.strip(),))
-            user_record = cursor.fetchone()
+        user_record = process_user_authentication(input_user, input_pass)
         
         if user_record and secure_hash_pbkdf2(input_pass.strip(), user_record[0]) == user_record[1]:
             st.session_state.auth_token = f"JWT_SECURE_{hashlib.md5(input_user.encode()).hexdigest()[:6]}"
@@ -300,6 +276,7 @@ else:
     st.sidebar.info(f"Workspace Boundary: {st.session_state.org_id}")
     if st.sidebar.button("Kill Process Loop", use_container_width=True):
         st.session_state.auth_token = None
+        st.clear_cache()
         st.rerun()
 
 # ==========================================
@@ -311,8 +288,6 @@ with DatabaseWorkspaceManager() as cursor:
     columns = [col[0] for col in cursor.description]
     tenant_clusters_df = pd.DataFrame(cursor.fetchall(), columns=columns)
 
-active_usage_count = len(tenant_clusters_df)
-portfolio_alerts = []
 global_total_valuation = 0.0
 global_exposure_max = 0.0
 cluster_rankings = []
@@ -371,12 +346,12 @@ with DatabaseWorkspaceManager() as cursor:
     records = cursor.fetchall()
 
 if not records:
-    trend_percentage, trend_narrative_label = 0.0, "⚖️ Baseline Establishing"
+    trend_narrative_label = "⚖️ Baseline Establishing"
 else:
     historic_values = [r[0] for r in records]
     avg_historic_exposure = sum(historic_values) / len(historic_values)
     if avg_historic_exposure == 0:
-        trend_percentage, trend_narrative_label = 0.0, "⚖️ Baseline Stable"
+        trend_narrative_label = "⚖️ Baseline Stable"
     else:
         trend_percentage = ((global_exposure_max - avg_historic_exposure) / avg_historic_exposure) * 100
         trend_narrative_label = f"📈 +{trend_percentage:.1f}% Risk" if trend_percentage > 5.0 else f"📉 {trend_percentage:.1f}% Risk" if trend_percentage < -5.0 else "🔄 Volatility Stable"
