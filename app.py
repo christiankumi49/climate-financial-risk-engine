@@ -1,16 +1,15 @@
 import streamlit as st
+import sqlite3
+import os
+import hashlib
 import requests
 import pandas as pd
-import sqlite3
-import hashlib
-import os
-import time
-from datetime import datetime, timedelta
 
 # =========================
-# ⚙️ CONFIG
+# ⚙️ CONFIG (PERSISTENT PATH)
 # =========================
-DB_PATH = os.path.abspath("climate_risk_vault.db")
+DB_PATH = "/mount/data/climate_risk_vault.db"
+
 st.set_page_config(page_title="Climate Risk Platform", layout="wide")
 
 # =========================
@@ -37,11 +36,14 @@ def generate_salt():
 
 def hash_password(password, salt):
     return hashlib.pbkdf2_hmac(
-        'sha256', password.encode(), bytes.fromhex(salt), 100000
+        "sha256",
+        password.encode(),
+        bytes.fromhex(salt),
+        100000
     ).hex()
 
 # =========================
-# 🏗️ INIT DB (SAFE)
+# 🏗️ INIT DB (ALWAYS SAFE)
 # =========================
 def init_db():
     with DatabaseWorkspaceManager() as cursor:
@@ -69,6 +71,7 @@ def init_db():
         )
         """)
 
+        # Seed users if empty
         cursor.execute("SELECT COUNT(*) FROM users")
         if cursor.fetchone()[0] == 0:
             users = [
@@ -82,21 +85,29 @@ def init_db():
                     (u, salt, hash_password(p, salt), r, o)
                 )
 
+# 🔥 FORCE INIT BEFORE ANYTHING
 init_db()
 
 # =========================
-# 🔑 AUTH (FIXED)
+# 🔑 AUTH (BULLETPROOF)
 # =========================
 def process_user_authentication(username, password):
     if not username or not password:
         return None
 
-    with DatabaseWorkspaceManager() as cursor:
-        cursor.execute(
-            "SELECT salt, password_hash, role, org_id FROM users WHERE username=?",
-            (username.strip(),)
-        )
-        user = cursor.fetchone()
+    # 🔥 ensure DB always exists (extra safety)
+    init_db()
+
+    try:
+        with DatabaseWorkspaceManager() as cursor:
+            cursor.execute(
+                "SELECT salt, password_hash, role, org_id FROM users WHERE username=?",
+                (username.strip(),)
+            )
+            user = cursor.fetchone()
+    except sqlite3.OperationalError:
+        st.error("Database not ready")
+        st.stop()
 
     if not user:
         return None
@@ -104,7 +115,11 @@ def process_user_authentication(username, password):
     salt, stored_hash, role, org_id = user
 
     if hash_password(password.strip(), salt) == stored_hash:
-        return {"username": username, "role": role, "org_id": org_id}
+        return {
+            "username": username.strip(),
+            "role": role,
+            "org_id": org_id
+        }
 
     return None
 
@@ -112,10 +127,11 @@ def process_user_authentication(username, password):
 # 🌦️ WEATHER ENGINE
 # =========================
 def fetch_weather(lat, lon):
-    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=temperature_2m_max,precipitation_sum&forecast_days=7"
     try:
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=temperature_2m_max,precipitation_sum&forecast_days=7"
         res = requests.get(url, timeout=5)
         data = res.json()["daily"]
+
         return pd.DataFrame({
             "temp": data["temperature_2m_max"],
             "rain": data["precipitation_sum"]
@@ -126,7 +142,7 @@ def fetch_weather(lat, lon):
 # =========================
 # 📊 RISK ENGINE
 # =========================
-def compute_risk(df, asset_value):
+def compute_risk(df, asset):
     if df is None:
         return 0
 
@@ -135,16 +151,16 @@ def compute_risk(df, asset_value):
 
     risk = 0
     if rain > 40:
-        risk += asset_value * 0.3
+        risk += asset * 0.3
     if temp > 33:
-        risk += asset_value * 0.2
+        risk += asset * 0.2
 
     return risk
 
 # =========================
-# 🚀 APP
+# 🚀 APP UI
 # =========================
-st.title("🌍 Climate Financial Risk Intelligence")
+st.title("🌍 Climate Financial Risk Intelligence Platform")
 
 if "user" not in st.session_state:
     st.session_state.user = None
@@ -153,13 +169,15 @@ if "user" not in st.session_state:
 if not st.session_state.user:
     st.subheader("Login")
 
-    u = st.text_input("Username")
-    p = st.text_input("Password", type="password")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
 
     if st.button("Login"):
-        user = process_user_authentication(u, p)
+        user = process_user_authentication(username, password)
+
         if user:
             st.session_state.user = user
+            st.success("Login successful")
             st.rerun()
         else:
             st.error("Invalid credentials")
@@ -172,9 +190,12 @@ else:
         st.session_state.user = None
         st.rerun()
 
-    # Load clusters
+    # Load farm clusters
     with DatabaseWorkspaceManager() as cursor:
-        cursor.execute("SELECT * FROM farm_clusters WHERE org_id=?", (st.session_state.user["org_id"],))
+        cursor.execute(
+            "SELECT * FROM farm_clusters WHERE org_id=?",
+            (st.session_state.user["org_id"],)
+        )
         df = pd.DataFrame(cursor.fetchall(), columns=[c[0] for c in cursor.description])
 
     total_risk = 0
@@ -187,8 +208,6 @@ else:
             total_risk += risk
 
         st.metric("💰 Total Risk Exposure", f"GHS {total_risk:,.2f}")
-
         st.map(df[["latitude", "longitude"]])
-
     else:
         st.info("No farm data available.")
