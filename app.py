@@ -5,45 +5,10 @@ import sqlite3
 import hashlib
 import os
 import json
-import logging
-from logging.handlers import RotatingFileHandler
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 
 # Configure Enterprise Page Environment
 st.set_page_config(page_title="Climate Financial Risk Intelligence Platform (V3.5 Pro)", layout="wide")
-
-# ==========================================
-# 🛑 LAYER 0: PRODUCTION ROTATING LOGGING SYSTEM
-# ==========================================
-def initialize_production_logger():
-    """Sets up an industrial-grade rolling log architecture."""
-    logger = logging.getLogger("CRIP_PROD_ENGINE")
-    logger.setLevel(logging.INFO)
-    
-    # Prevent duplicate handler attachments during Streamlit hot-reloads
-    if not logger.handlers:
-        # Enforce file limits: 5MB maximum capacity per file with a 3-file history rotation
-        file_handler = RotatingFileHandler(
-            "crip_production.log", 
-            maxBytes=5 * 1024 * 1024, 
-            backupCount=3,
-            encoding="utf-8"
-        )
-        
-        # Standardized log formatting for system monitoring tools (Datadog/Logstash)
-        log_format = logging.Formatter(
-            '[%(asctime)s] %(levelname)s [%(name)s:%(lineno)d] - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-        file_handler.setFormatter(log_format)
-        logger.addHandler(file_handler)
-        
-    return logger
-
-system_logger = initialize_production_logger()
 
 # ==========================================
 # 💾 LAYER 1: DATA PERSISTENCE & TIMELINE LEDGERS
@@ -59,42 +24,81 @@ def init_hardened_db():
     conn = sqlite3.connect("climate_risk_vault.db")
     cursor = conn.cursor()
     
+    # 1. Multi-Tenant User Registry
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY, salt_hex TEXT, password_hash TEXT, role TEXT, org_id TEXT
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS farm_clusters (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, org_id TEXT, cluster_name TEXT,
-            latitude REAL, longitude REAL, crop_type TEXT, acres REAL, expected_yield REAL, market_price REAL
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS weather_cache (
-            coordinate_key TEXT PRIMARY KEY, timestamp TEXT, json_payload TEXT
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS daily_risk_ledger (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, snapshot_date TEXT, org_id TEXT,
-            aggregate_exposure REAL, active_threat_count INTEGER, UNIQUE(snapshot_date, org_id)
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS asset_audit_ledger (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, cluster_name TEXT,
-            crop_type TEXT, risk_event TEXT, logged_by TEXT, action_implemented TEXT,
-            actual_loss_ghs REAL, predicted_loss_max_ghs REAL, status TEXT
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS calibration_matrix (
-            crop_type TEXT PRIMARY KEY, heavy_rain_low REAL, heavy_rain_high REAL, heat_stress_low REAL, heat_stress_high REAL
+            username TEXT PRIMARY KEY,
+            salt_hex TEXT,
+            password_hash TEXT,
+            role TEXT,
+            org_id TEXT
         )
     """)
     
-    # Seed Baseline Security Framework Profiles
+    # 2. Dynamic SaaS Farm Cluster Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS farm_clusters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id TEXT,
+            cluster_name TEXT,
+            latitude REAL,
+            longitude REAL,
+            crop_type TEXT,
+            acres REAL,
+            expected_yield REAL,
+            market_price REAL
+        )
+    """)
+    
+    # 3. Weather Resiliency Cache with Freshness Timestamping
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS weather_cache (
+            coordinate_key TEXT PRIMARY KEY,
+            timestamp TEXT,
+            json_payload TEXT
+        )
+    """)
+    
+    # 4. Temporal Intelligence Layer: Historic Snapshot Ledger
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS daily_risk_ledger (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            snapshot_date TEXT,
+            org_id TEXT,
+            aggregate_exposure REAL,
+            active_threat_count INTEGER,
+            UNIQUE(snapshot_date, org_id)
+        )
+    """)
+    
+    # 5. Immutable Field Audit Ledger
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS asset_audit_ledger (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            cluster_name TEXT,
+            crop_type TEXT,
+            risk_event TEXT,
+            logged_by TEXT,
+            action_implemented TEXT,
+            actual_loss_ghs REAL,
+            predicted_loss_max_ghs REAL,
+            status TEXT
+        )
+    """)
+    
+    # 6. Adaptive Calibration Matrix
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS calibration_matrix (
+            crop_type TEXT PRIMARY KEY,
+            heavy_rain_low REAL,
+            heavy_rain_high REAL,
+            heat_stress_low REAL,
+            heat_stress_high REAL
+        )
+    """)
+    
+    # Seed Baseline Profiles
     cursor.execute("SELECT COUNT(*) FROM users")
     if cursor.fetchone()[0] == 0:
         users_to_seed = [
@@ -107,7 +111,7 @@ def init_hardened_db():
             pwd_hash = secure_hash_pbkdf2(plain_pass, user_salt)
             cursor.execute("INSERT INTO users VALUES (?, ?, ?, ?, ?)", (username, user_salt, pwd_hash, role, org_id))
             
-    # Seed Data Points
+    # Seed Initial Workspace Data Points
     cursor.execute("SELECT COUNT(*) FROM farm_clusters")
     if cursor.fetchone()[0] == 0:
         base_clusters = [
@@ -117,13 +121,32 @@ def init_hardened_db():
         ]
         cursor.executemany("INSERT INTO farm_clusters (org_id, cluster_name, latitude, longitude, crop_type, acres, expected_yield, market_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", base_clusters)
         
+    # Seed Baseline Historic Snapshots to generate Day-One Trend Calculations
+    cursor.execute("SELECT COUNT(*) FROM daily_risk_ledger")
+    if cursor.fetchone()[0] == 0:
+        today_dt = datetime.now()
+        historic_snapshots = []
+        for i in range(1, 8):
+            past_date = (today_dt - timedelta(days=i)).strftime("%Y-%m-%d")
+            historic_snapshots.append((past_date, "ORG_KUMI_AGRI_GLOBAL", 185000.0 + (i * 12500), i % 3))
+            historic_snapshots.append((past_date, "ORG_COCOA_CORP", 420000.0 - (i * 25000), i % 2))
+        cursor.executemany("INSERT OR IGNORE INTO daily_risk_ledger (snapshot_date, org_id, aggregate_exposure, active_threat_count) VALUES (?, ?, ?, ?)", historic_snapshots)
+
+    # Seed Calibration Targets
+    cursor.execute("SELECT COUNT(*) FROM calibration_matrix")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany("INSERT INTO calibration_matrix VALUES (?, ?, ?, ?, ?)", [
+            ("Maize", 0.15, 0.30, 0.10, 0.25),
+            ("Rice",  0.10, 0.20, 0.15, 0.35),
+            ("Cocoa", 0.20, 0.40, 0.25, 0.50)
+        ])
     conn.commit()
     conn.close()
 
 init_hardened_db()
 
 # ==========================================
-# 🛰️ LAYER 2: TELEMETRY INGESTION WITH TRACED COLD FAILOVER
+# 🛰️ LAYER 2: TELEMETRY INGESTION ENGINE WITH VISIBLE ERROR TRACING
 # ==========================================
 def save_to_local_cache(lat, lon, df):
     conn = sqlite3.connect("climate_risk_vault.db")
@@ -158,11 +181,11 @@ def fetch_weather_intelligence(lat, lon):
     secondary_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&forecast_days=14&models=gfs_seamless"
 
     cached_df, is_fresh = fetch_from_local_cache(lat, lon)
+    
     if cached_df is not None and is_fresh:
-        system_logger.info(f"Cache hit: Serving fresh data for spatial point ({lat}, {lon})")
         return cached_df, "🟢 MEMORY INSTANCE FRESH (CACHE ACTIVE)"
 
-    # Step 1: Query Primary Route
+    # Step 1: Query Primary Route with Diagnostic Tracing
     try:
         res = requests.get(primary_url, timeout=3)
         if res.status_code == 200:
@@ -172,15 +195,14 @@ def fetch_weather_intelligence(lat, lon):
                 "Min Temp (°C)": daily['temperature_2m_min'], "Rainfall (mm)": daily['precipitation_sum']
             })
             save_to_local_cache(lat, lon, df)
-            system_logger.info(f"Primary API Success: Pulled telemetry data for coordinate space ({lat}, {lon})")
             return df, "🟢 PRIMARY LIVE TELEMETRY"
         else:
-            system_logger.warning(f"Primary API Outage: Remote site responded with code {res.status_code} for ({lat}, {lon})")
+            print(f"⚠️ Primary API returned bad status code: {res.status_code}")
     except Exception as e:
-        system_logger.error(f"Network Fault on Primary API stream at ({lat}, {lon}): {str(e)}")
-        st.sidebar.warning(f"Primary Stream Outage at ({lat}, {lon}). Fallback engaged.")
+        print(f"❌ Primary weather fetch failed exception trace: {str(e)}")
+        st.sidebar.warning(f"Primary Stream Outage at ({lat}, {lon}). Routing to Secondary...")
 
-    # Step 2: Query Backup Route
+    # Step 2: Query Backup Route with Diagnostic Tracing
     try:
         res = requests.get(secondary_url, timeout=3)
         if res.status_code == 200:
@@ -190,20 +212,17 @@ def fetch_weather_intelligence(lat, lon):
                 "Min Temp (°C)": daily['temperature_2m_min'], "Rainfall (mm)": daily['precipitation_sum']
             })
             save_to_local_cache(lat, lon, df)
-            system_logger.info(f"Secondary Route Success: Stabilized network link for ({lat}, {lon})")
             return df, "🟡 BACKUP LIVE TELEMETRY"
         else:
-            system_logger.warning(f"Secondary API Outage: Remote site responded with code {res.status_code} for ({lat}, {lon})")
+            print(f"⚠️ Secondary API returned bad status code: {res.status_code}")
     except Exception as e:
-        system_logger.error(f"Network Fault on Secondary API stream at ({lat}, {lon}): {str(e)}")
-        st.sidebar.warning(f"Secondary Stream Outage at ({lat}, {lon}). Accessing local cache storage...")
+        print(f"❌ Secondary weather fetch failed exception trace: {str(e)}")
+        st.sidebar.warning(f"Secondary Stream Outage at ({lat}, {lon}). Invoking Storage Fallback...")
 
     # Step 3: Fallback to cold cache record
     if cached_df is not None:
-        system_logger.warning(f"Resiliency Triggered: Serving expired cold cache for coordinate point ({lat}, {lon})")
         return cached_df, "¼ STALE OFFLINE STORAGE ENGINE FALLBACK"
         
-    system_logger.critical(f"Pipeline Dropout: No network routes available and zero database cache matches for ({lat}, {lon})")
     return None, "🚨 NETWORK DROPOUT CRITICAL"
 
 # ==========================================
@@ -232,14 +251,17 @@ def calculate_historical_trend_delta(org_id, current_exposure):
     records = cursor.fetchall()
     conn.close()
     
-    if not records: return 0.0, "⚖️ Baseline Establishing"
+    if not records:
+        return 0.0, "⚖️ Baseline Establishing"
         
     historic_values = [row[0] for row in records]
     avg_historic_exposure = sum(historic_values) / len(historic_values)
     
-    if avg_historic_exposure == 0: return 0.0, "⚖️ Baseline Stable"
+    if avg_historic_exposure == 0:
+        return 0.0, "⚖️ Baseline Stable"
         
     percentage_delta = ((current_exposure - avg_historic_exposure) / avg_historic_exposure) * 100
+    
     if percentage_delta > 5.0:
         return percentage_delta, f"📈 +{percentage_delta:.1f}% Risk Acceleration vs 7-Day Average"
     elif percentage_delta < -5.0:
@@ -248,94 +270,24 @@ def calculate_historical_trend_delta(org_id, current_exposure):
         return percentage_delta, "🔄 Standard Volatility Footprint"
 
 # ==========================================
-# 🚨 LAYER 4: LIVE PRODUCTION NOTIFICATION INTEGRATIONS
+# 🚨 LAYER 4: NOTIFICATION ALERT SYSTEMS ROUTER
 # ==========================================
-def dispatch_twilio_sms(recipient_phone, message_body):
-    """Sends immediate cellular notifications to field units via the Twilio SMS Gateway."""
-    # Retrieve tokens from environment configuration files
-    account_sid = os.environ.get("TWILIO_ACCOUNT_SID", "MOCK_SID_VAL")
-    auth_token = os.environ.get("TWILIO_AUTH_TOKEN", "MOCK_TOKEN_VAL")
-    from_phone = os.environ.get("TWILIO_NUMBER", "+1234567890")
-    
-    if account_sid == "MOCK_SID_VAL":
-        system_logger.info(f"SMS Integration Broadcast Simulation (Twilio Env Token Unset) To: {recipient_phone} -> Body: {message_body}")
-        return False
-
-    try:
-        # standard integration payload framework
-        url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
-        payload = {"To": recipient_phone, "From": from_phone, "Body": message_body}
-        res = requests.post(url, data=payload, auth=(account_sid, auth_token), timeout=5)
-        if res.status_code in [200, 201]:
-            system_logger.info(f"Twilio SMS dispatched successfully to destination channel: {recipient_phone}")
-            return True
-        else:
-            system_logger.error(f"Twilio API Gateway rejected the payload request with code {res.status_code}: {res.text}")
-    except Exception as error:
-        system_logger.error(f"Twilio API connection failed: {str(error)}")
-    return False
-
-def dispatch_smtp_email(target_email, subject, body_content):
-    """Pushes automated executive HTML summaries to corporate endpoints via SMTP relay lines."""
-    smtp_server = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    sender_email = os.environ.get("SMTP_USER", "alert-system@globalagri.com")
-    sender_password = os.environ.get("SMTP_PASSWORD", "")
-
-    if not sender_password:
-        system_logger.info(f"SMTP Relay Simulation (SMTP Password Environment Unset) To: {target_email} -> Sub: {subject}")
-        return False
-
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = sender_email
-        msg['To'] = target_email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body_content, 'html'))
-
-        server = smtplib.SMTP(smtp_server, smtp_port)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.send_message(msg)
-        server.quit()
-        
-        system_logger.info(f"Executive security bulletin sent to target subscriber box: {target_email}")
-        return True
-    except Exception as error:
-        system_logger.error(f"SMTP corporate relay failed to process message package: {str(error)}")
-    return False
-
 def route_emergency_broadcast(org_id, target_exposure, primary_threat):
-    """Coordinates risk actions across secure messaging pipelines."""
-    system_logger.critical(f"Risk Breach Exception: Asset group belonging to {org_id} has exceeded acceptable parameters. Valuation at Risk: GH₵ {target_exposure:,.2f}")
-    
-    sms_alert_text = f"[CRIP RISK ALERT] Organization {org_id} capital at risk has hit GH₵ {target_exposure:,.2f} driven by {primary_threat}. Action required."
-    
-    # Fire asynchronous multi-channel pipelines
-    dispatch_twilio_sms("+233200000000", sms_alert_text)
-    
-    html_bulletin = f"""
-    <html>
-        <body style="font-family:sans-serif; padding:20px; color:#333;">
-            <h2 style="color:#B91C1C;">⚠️ CRIP Automated Exposure Alert Bulletin</h2>
-            <p>This automated notification was generated because asset group holdings for tenant space <strong>{org_id}</strong> have breached safety baselines.</p>
-            <ul>
-                <li><strong>Current Capital Exposure:</strong> GH₵ {target_exposure:,.2f}</li>
-                <li><strong>Active Atmospheric Vectors:</strong> {primary_threat}</li>
-                <li><strong>Timestamp:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</li>
-            </ul>
-            <p>Please log in to your management gateway interface immediately to authorize tactical defense protocols.</p>
-        </body>
-    </html>
-    """
-    dispatch_smtp_email("risk-officer@agricorp.com", f"🚨 CRIP RISK BREACH NOTICE: {org_id}", html_bulletin)
-
+    alert_payload = {
+        "timestamp": datetime.now().isoformat(),
+        "target_tenant": org_id,
+        "exposure_breach_ghs": target_exposure,
+        "identified_vector": primary_threat,
+        "security_clearance": "CRITICAL_ACTION_REQUIRED"
+    }
     st.sidebar.error(f"""
-    📢 **AUTONOMOUS PUSH DISPATCHED**
-    * **Impact Matrix:** GH₵ {target_exposure:,.2f}
+    📢 **AUTONOMOUS PUSH INCIDENT**
+    * **Trigger:** Exposure Breach Threshold
+    * **Impact:** GH₵ {target_exposure:,.2f}
     * **Vector:** {primary_threat}
-    * **Logging Output:** Dispatched updates to SMS & Corporate Email servers.
+    * **Routing:** Dispatching SMS Gateway & Broker Systems...
     """)
+    print(f"📦 [CRIP ALERT ENGINE DISPATCHED] -> {json.dumps(alert_payload)}")
 
 # ==========================================
 # 🔒 LAYER 5: ACCESS CONTROLS GATEWAY
@@ -364,18 +316,22 @@ if not st.session_state.auth_token:
             st.session_state.user_display = input_user.strip()
             st.session_state.org_id = user_record[3]
             st.session_state.account_tier = "Enterprise Agribusiness Plan" if input_user.strip() == "system_admin_kumi" else "Standard Demo"
-            system_logger.info(f"User login authorized: session handle {st.session_state.user_display} granted access rights to space {st.session_state.org_id}")
             st.rerun()
         else:
-            system_logger.warning(f"Unauthorized security attempt detected on user entry handle: '{input_user}'")
             st.sidebar.error("Verification Token Mismatch.")
     st.stop()
 else:
     st.sidebar.success(f"🔐 Session: {st.session_state.user_display}")
     st.sidebar.info(f"Workspace Boundary: {st.session_state.org_id}")
+    st.sidebar.info(f"SaaS Tier: {st.session_state.account_tier}")
     
+    if st.session_state.account_tier == "Standard Demo":
+        st.sidebar.warning("⚡ 3-Cluster Workspace Limit Enforced")
+        if st.sidebar.button("💎 Unlock Corporate Enterprise Space"):
+            st.session_state.account_tier = "Enterprise Agribusiness Plan"
+            st.rerun()
+            
     if st.sidebar.button("Kill Process Loop", use_container_width=True):
-        system_logger.info(f"User session terminated: {st.session_state.user_display}")
         st.session_state.auth_token = None
         st.rerun()
 
@@ -436,11 +392,14 @@ if not tenant_clusters_df.empty:
         })
         map_coordinates_list.append({"latitude": lat, "longitude": lon, "size": float(max(20.0, min(180.0, (cluster_max_exposure / 20000.0))))})
 
+# Deduplicate arrays to enforce analytic accuracy
 unique_threat_count = len(list(set(active_threat_types)))
 
+# Store snapshot metrics into database persistence partitions
 if not tenant_clusters_df.empty:
     commit_daily_risk_snapshot(st.session_state.org_id, global_exposure_max, unique_threat_count)
 
+# Compute Trend Intelligence Metrics
 trend_percentage, trend_narrative_label = calculate_historical_trend_delta(st.session_state.org_id, global_exposure_max)
 
 # ==========================================
@@ -449,6 +408,7 @@ trend_percentage, trend_narrative_label = calculate_historical_trend_delta(st.se
 st.title("🌍 Climate Financial Risk Intelligence Platform")
 st.caption(f"Real-Time Climate Risk Decision Engine with Automated Alerts and Adaptive Learning Matrix.")
 
+# EXECUTIVE INTELLIGENCE DECISION PANEL
 if not tenant_clusters_df.empty:
     executive_threat_signal = "🚨 HIGH RISK EXPOSURE IMPACT" if global_exposure_max > 100000 else "🟢 STABLE RUNTIME BASELINE"
     dominant_threat_profile = ", ".join(list(set(active_threat_types))) if active_threat_types else "None Identified"
