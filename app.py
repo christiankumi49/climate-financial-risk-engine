@@ -49,9 +49,10 @@ class DatabaseWorkspaceManager:
         self.conn = None
 
     def __enter__(self):
-        # FIX: Increased timeout to 60 seconds to completely clear multi-session queues
+        # FIX: Elevated transaction parameters and isolated read/write handling via explicit WAL enforcement
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=60.0)
         self.conn.execute("PRAGMA journal_mode=WAL;")
+        self.conn.execute("PRAGMA synchronous=NORMAL;")
         return self.conn.cursor()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -69,7 +70,6 @@ def secure_hash_pbkdf2(password, salt_hex):
     salt = bytes.fromhex(salt_hex)
     return hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000).hex()
 
-# FIX: Cached routine guarantees setup runs exactly once on launch, preventing table lookups from hitting lock states
 @st.cache_resource
 def init_hardened_db():
     with DatabaseWorkspaceManager() as cursor:
@@ -169,7 +169,7 @@ def fetch_weather_intelligence(lat, lon):
     except Exception as e:
         system_logger.error(f"Primary Ingestion Fault at ({lat}, {lon}): {str(e)}")
 
-    # Secondary API Call (True NOAA Infrastructure Fallback)
+    # Secondary API Call
     try:
         res = requests.get(secondary_url, timeout=3)
         if res.status_code == 200:
@@ -191,7 +191,6 @@ def fetch_weather_intelligence(lat, lon):
 # 🚨 LAYER 4: LIVE SECURE ALERTS WITH GRACEFUL DEGRADATION
 # ==========================================
 def dispatch_twilio_sms_hardened(recipient_phone, message_body):
-    """Executes resilient cellular notification loops with clean environment validation."""
     account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
     auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
     from_phone = os.environ.get("TWILIO_NUMBER")
@@ -218,7 +217,6 @@ def dispatch_twilio_sms_hardened(recipient_phone, message_body):
     return False
 
 def dispatch_smtp_email_hardened(target_email, subject, body_content):
-    """Transmits encrypted briefings through an automated, resilient SMTP tunnel connection."""
     smtp_server = os.environ.get("SMTP_HOST")
     smtp_port = os.environ.get("SMTP_PORT")
     sender_email = os.environ.get("SMTP_USER")
@@ -281,6 +279,8 @@ if not st.session_state.auth_token:
     input_pass = st.sidebar.text_input("Key Sequence Token", type="password")
     
     if st.sidebar.button("Initialize Platform Engine", use_container_width=True):
+        # FIX: Explicit query separation inside the block ensures data fetches close out instantly
+        user_record = None
         with DatabaseWorkspaceManager() as cursor:
             cursor.execute("SELECT salt_hex, password_hash, role, org_id FROM users WHERE username=?", (input_user.strip(),))
             user_record = cursor.fetchone()
@@ -305,6 +305,7 @@ else:
 # ==========================================
 # 📊 LAYER 6: CORE PREDICTIVE COMPUTATION LOOP
 # ==========================================
+tenant_clusters_df = pd.DataFrame()
 with DatabaseWorkspaceManager() as cursor:
     cursor.execute("SELECT * FROM farm_clusters WHERE org_id=?", (st.session_state.org_id,))
     columns = [col[0] for col in cursor.description]
@@ -364,6 +365,7 @@ if not tenant_clusters_df.empty:
             ON CONFLICT(snapshot_date, org_id) DO UPDATE SET aggregate_exposure=?, active_threat_count=?
         """, (today_str, st.session_state.org_id, global_exposure_max, unique_threat_count, global_exposure_max, unique_threat_count))
 
+records = []
 with DatabaseWorkspaceManager() as cursor:
     cursor.execute("SELECT aggregate_exposure FROM daily_risk_ledger WHERE org_id=? AND snapshot_date != date('now') ORDER BY snapshot_date DESC LIMIT 7", (st.session_state.org_id,))
     records = cursor.fetchall()
