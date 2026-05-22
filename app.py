@@ -286,83 +286,98 @@ if not insight_narrative_summary:
     insight_narrative_summary = "All monitored regional zones are operating inside verified optimal climate boundaries over the execution horizon."
 
 # ==========================================
-# 📊 LAYER 4.5: SECURE REPORTING PIPELINE (HTML EXPORT ENGINE)
+# 📊 LAYER 4.5: SECURE REPORTING PIPELINE (PREMIUM HTML EXPORT DESIGN)
 # ==========================================
 def generate_compliance_report_html():
-    """Generates an enterprise-formatted document layout for audit compliance packages."""
+    """Generates an elite corporate layout specification sheet for investor presentations."""
     html_payload = f"""
     <html>
     <head>
         <style>
-            body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; color: #2C3E50; }}
-            .header {{ border-bottom: 3px solid #1E3A8A; padding-bottom: 20px; margin-bottom: 30px; }}
-            .title {{ font-size: 24px; font-weight: bold; color: #1E3A8A; text-transform: uppercase; }}
-            .meta-table {{ width: 100%; border-collapse: collapse; margin-bottom: 30px; }}
-            .meta-table td {{ padding: 8px; border: 1px solid #E2E8F0; }}
-            .meta-table td.label {{ font-weight: bold; background-color: #F8FAFC; width: 30%; }}
-            .data-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-            .data-table th {{ background-color: #1E3A8A; color: white; padding: 12px; text-align: left; font-size: 14px; }}
-            .data-table td {{ padding: 12px; border: 1px solid #E2E8F0; font-size: 13px; }}
+            body {{ font-family: 'Segoe UI', -apple-system, Arial, sans-serif; margin: 0; padding: 40px; color: #1E293B; background-color: #F8FAFC; }}
+            .container {{ max-width: 1100px; margin: 0 auto; background: #FFFFFF; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border: 1px solid #E2E8F0; }}
+            .header-strip {{ border-left: 6px solid #1E3A8A; padding-left: 20px; margin-bottom: 35px; }}
+            .title {{ font-size: 26px; font-weight: 800; color: #1E3A8A; text-transform: uppercase; letter-spacing: -0.5px; margin: 0; }}
+            .subtitle {{ font-size: 13px; color: #64748B; margin-top: 5px; font-weight: 500; }}
+            
+            .grid {{ display: flex; gap: 20px; margin-bottom: 35px; }}
+            .card {{ flex: 1; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 20px; }}
+            .card-label {{ font-size: 11px; text-transform: uppercase; color: #64748B; font-weight: 700; letter-spacing: 0.5px; }}
+            .card-value {{ font-size: 20px; font-weight: 700; color: #0F172A; margin-top: 8px; }}
+            
+            h3 {{ font-size: 16px; font-weight: 700; color: #1E3A8A; border-bottom: 1px solid #E2E8F0; padding-bottom: 8px; margin-top: 0; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.3px; }}
+            
+            .data-table {{ width: 100%; border-collapse: collapse; margin-bottom: 35px; }}
+            .data-table th {{ background-color: #1E3A8A; color: #FFFFFF; padding: 14px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }}
+            .data-table td {{ padding: 14px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #334155; }}
             .data-table tr:nth-child(even) {{ background-color: #F8FAFC; }}
-            .footer {{ margin-top: 50px; border-top: 1px solid #CBD5E1; padding-top: 15px; font-size: 11px; color: #64748B; text-align: center; }}
+            
+            .badge {{ display: inline-block; padding: 4px 8px; font-size: 11px; font-weight: 700; border-radius: 4px; text-transform: uppercase; }}
+            .badge-high {{ background-color: #FEE2E2; color: #991B1B; border: 1px solid #FCA5A5; }}
+            .badge-stable {{ background-color: #DCFCE7; color: #166534; border: 1px solid #86EFAC; }}
+            
+            .footer {{ margin-top: 60px; border-top: 2px solid #E2E8F0; padding-top: 20px; font-size: 11px; color: #94A3B8; text-align: center; line-height: 1.6; }}
         </style>
     </head>
     <body>
-        <div class="header">
-            <div class="title">CRIP v3.5 Pro - Financial Risk Audit Package</div>
-            <div style="font-size: 12px; color: #64748B; margin-top: 5px;">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Synchronized Accra Timezone</div>
-        </div>
-        
-        <h3>💼 Executive Summary Overview</h3>
-        <table class="meta-table">
-            <tr>
-                <td class="label">Total Managed Asset Valuation</td>
-                <td>GH₵ {global_total_valuation:,.2f}</td>
-            </tr>
-            <tr>
-                <td class="label">Aggregate Exposure Window Range</td>
-                <td>GH₵ {global_exposure_min:,.2f} - GH₵ {global_exposure_max:,.2f}</td>
-            </tr>
-            <tr>
-                <td class="label">Model Calibration Confidence Score</td>
-                <td>{system_confidence * 100:.1f}%</td>
-            </tr>
-            <tr>
-                <td class="label">Primary Security Authorization Tag</td>
-                <td>{st.session_state.get('auth_token', 'UNAUTHORIZED')}</td>
-            </tr>
-        </table>
+        <div class="container">
+            <div class="header-strip">
+                <div class="title">CRIP v3.5 Pro - Portfolio Risk Audit Package</div>
+                <div class="subtitle">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Verification Region: Accra Terminal Loop</div>
+            </div>
+            
+            <h3>💼 High-Level Summary Overview</h3>
+            <div class="grid">
+                <div class="card">
+                    <div class="card-label">Total Managed Valuation</div>
+                    <div class="card-value">GH₵ {global_total_valuation:,.2f}</div>
+                </div>
+                <div class="card">
+                    <div class="card-label">Aggregate Predictive Exposure</div>
+                    <div class="card-value" style="color: #B91C1C;">GH₵ {global_exposure_max:,.2f}</div>
+                </div>
+                <div class="card">
+                    <div class="card-label">Model Calibration Precision</div>
+                    <div class="card-value">{system_confidence * 100:.1f}%</div>
+                </div>
+                <div class="card">
+                    <div class="card-label">Security Clearance Tag</div>
+                    <div class="card-value" style="font-family: monospace; font-size: 15px;">{st.session_state.get('auth_token', 'UNAUTHORIZED')}</div>
+                </div>
+            </div>
 
-        <h3>📊 Crop Cluster Strategic Risk Stratification</h3>
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Farm Node Cluster Name</th>
-                    <th>Active Asset Crop</th>
-                    <th>Total Valuation (GHS)</th>
-                    <th>Value At Risk (GHS)</th>
-                    <th>Identified Trend Vector</th>
-                </tr>
-            </thead>
-            <tbody>
+            <h3>📊 Strategic Crop Cluster Risk Rankings</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Farm Node Cluster Name</th>
+                        <th>Active Asset Crop</th>
+                        <th>Total Valuation</th>
+                        <th>Value At Risk (Max)</th>
+                        <th>Identified Trend Status</th>
+                    </tr>
+                </thead>
+                <tbody>
     """
     for _, row in rank_df.iterrows():
+        badge_style = "badge-high" if row['Value At Risk (GHS)'] > 500000 else "badge-stable"
         html_payload += f"""
-                <tr>
-                    <td>{row['Farm Node Cluster Name']}</td>
-                    <td>{row['Active Asset Crop']}</td>
-                    <td>GH₵ {row['Total Valuation (GHS)']:,.2f}</td>
-                    <td>GH₵ {row['Value At Risk (GHS)']:,.2f}</td>
-                    <td>{row['Identified Trend Vector']}</td>
-                </tr>
+                    <tr>
+                        <td style="font-weight: 600; color: #0F172A;">{row['Farm Node Cluster Name']}</td>
+                        <td>{row['Active Asset Crop']}</td>
+                        <td>GH₵ {row['Total Valuation (GHS)']:,.2f}</td>
+                        <td style="font-weight: 700; color: #B91C1C;">GH₵ {row['Value At Risk (GHS)']:,.2f}</td>
+                        <td><span class="badge {badge_style}">{row['Identified Trend Vector']}</span></td>
+                    </tr>
         """
     html_payload += f"""
-            </tbody>
-        </table>
-        
-        <div class="footer">
-            CRIP v3.5 Pro Platform | Developed by Christian Kumi — Meteorology, Climate Science & Software Architecture at KNUST.<br>
-            Confidential Integrity Manifest Document - Internal Corporate Assessment Targets Only.
+                </tbody>
+            </table>
+            
+            <div class="footer">
+                CRIP v3.5 Pro Risk Management Framework | Architecture by Christian Kumi — KNUST Meteorology & Climate Science.<br>
+                <strong>Confidential Notice:</strong> This electronic report constitutes sealed decision-support telemetry. Unauthorized redistribution is bounded by encryption compliance structures.
+            </div>
         </div>
     </body>
     </html>
