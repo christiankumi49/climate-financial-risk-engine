@@ -143,7 +143,6 @@ def fetch_from_local_cache(lat, lon):
     return None, False
 
 def fetch_weather_intelligence(lat, lon):
-    # FIX: Redesigned fallback route to parse NOAA GFS model data rather than hitting the same primary endpoints
     primary_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&forecast_days=14&timezone=Africa/Accra"
     secondary_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&forecast_days=14&models=gfs_seamless&timezone=Africa/Accra"
 
@@ -188,7 +187,6 @@ def fetch_weather_intelligence(lat, lon):
 # ==========================================
 def dispatch_twilio_sms_hardened(recipient_phone, message_body):
     """Executes resilient cellular notification loops with clean environment validation."""
-    # REFACTOR: Utilize safe fallback getters to achieve graceful degradation bounds
     account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
     auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
     from_phone = os.environ.get("TWILIO_NUMBER")
@@ -255,7 +253,6 @@ def route_emergency_broadcast(org_id, target_exposure, primary_threat):
     html_bulletin = f"<html><body><h2 style='color:#991B1B;'>⚠️ Exposure Alert</h2><p>Tenant <strong>{org_id}</strong> value at risk: GH₵ {target_exposure:,.2f}</p></body></html>"
     email_sent = dispatch_smtp_email_hardened("risk-manager@agricorp.com", f"🚨 CRIP RISK NOTICE: {org_id}", html_bulletin)
 
-    # Inform front-end operator regarding channel delivery performance status
     if not sms_sent and not email_sent:
         st.sidebar.warning("⚠️ Alerts deactivated (Environment links unmapped or unreached).")
     else:
@@ -267,8 +264,12 @@ def route_emergency_broadcast(org_id, target_exposure, primary_threat):
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=45)
 st.sidebar.title("CRIP Gateway v3.5 Pro")
 
+# FIX: Initialize all required state keys safely to prevent pre-auth layout evaluation crashes
 if "auth_token" not in st.session_state: st.session_state.auth_token = None
 if "account_tier" not in st.session_state: st.session_state.account_tier = "Standard Demo"
+if "org_id" not in st.session_state: st.session_state.org_id = None
+if "user_display" not in st.session_state: st.session_state.user_display = None
+if "user_role" not in st.session_state: st.session_state.user_role = None
 
 if not st.session_state.auth_token:
     st.sidebar.subheader("🔒 Authentication Pool")
