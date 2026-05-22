@@ -148,20 +148,19 @@ if not st.session_state.auth_token:
     if st.sidebar.button("Initialize Secure Session", use_container_width=True):
         conn = sqlite3.connect("climate_risk_vault.db")
         cursor = conn.cursor()
-        # Query for the unique user record
-        cursor.execute("SELECT salt_hex, password_hash, role FROM users WHERE username=?", (input_user,))
+        cursor.execute("SELECT salt_hex, password_hash, role FROM users WHERE username=?", (input_user.strip(),))
         user_record = cursor.fetchone()
         conn.close()
         
-        if user_record and secure_hash_pbkdf2(input_pass, user_record[0]) == user_record[1]:
+        if user_record and secure_hash_pbkdf2(input_pass.strip(), user_record[0]) == user_record[1]:
             st.session_state.auth_token = f"JWT_SECURE_{hashlib.md5(input_user.encode()).hexdigest()[:6]}"
             st.session_state.user_role = user_record[2]
-            st.session_state.user_display = input_user
+            st.session_state.user_display = input_user.strip()
             st.rerun()
         else:
             st.sidebar.error("Access Denied: Secure token verification mismatch.")
             
-    st.sidebar.info("💡 Walkthrough Profiles:\n\n1. User: `executive_lead` / Pass: `gh_exec_2026`\n2. User: `field_manager_osei` / Pass: `gh_farm_2026`")
+    st.sidebar.info("💡 Walkthrough Profiles:\n\n1. User: `executive_lead` / Pass: `gh_exec_2026`\n2. User: `field_manager_osei` / Pass: `gh_farm_2026`\n3. User: `system_admin_kumi` / Pass: `gh_admin_2026`")
     st.stop()
 else:
     st.sidebar.success(f"🔐 Account: {st.session_state.user_display}")
@@ -183,14 +182,12 @@ def get_calibrated_coefficients(crop):
     return 0.15, 0.30, 0.10, 0.25
 
 def calculate_confidence_score():
-    """10x Upgrade: Compiles statistical validation score based on historic event outcomes."""
     conn = sqlite3.connect("climate_risk_vault.db")
     df = pd.read_sql_query("SELECT actual_loss_ghs, predicted_loss_max_ghs FROM asset_audit_ledger WHERE actual_loss_ghs > 0", conn)
     conn.close()
     if df.empty or len(df) < 2:
-        return 0.85  # Default baseline confidence prior to historical calibration scale
+        return 0.85
     
-    # Calculate Mean Absolute Percentage Error (MAPE) variance
     variances = []
     for _, row in df.iterrows():
         p = row["predicted_loss_max_ghs"]
@@ -209,9 +206,8 @@ global_exposure_max = 0.0
 cluster_rankings = []
 highest_trend_label = "STABLE"
 insight_narrative_summary = ""
-system_degraded_active = False  # Strict system status check (Priority 2)
+system_degraded_active = False
 
-# Compute Model Precision Footprint
 system_confidence = calculate_confidence_score()
 
 for name, meta in PORTFOLIO_REGISTRY.items():
@@ -220,7 +216,6 @@ for name, meta in PORTFOLIO_REGISTRY.items():
     
     weather_df = fetch_weather_intelligence(meta["lat"], meta["lon"])
     
-    # Priority 2: Fail-Safe Mode Hardlock Trigger
     if weather_df is None:
         system_degraded_active = True
         cluster_rankings.append({
@@ -278,38 +273,117 @@ if not insight_narrative_summary:
     insight_narrative_summary = "All monitored regional zones are operating inside verified optimal climate boundaries over the execution horizon."
 
 # ==========================================
+# 📊 LAYER 4.5: SECURE REPORTING PIPELINE (PDF/HTML EXPORT CONVERSION ENGINE)
+# ==========================================
+def generate_compliance_report_html():
+    """Generates an enterprise-formatted document layout for audit compliance packages."""
+    html_payload = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; color: #2C3E50; }}
+            .header {{ border-bottom: 3px solid #1E3A8A; padding-bottom: 20px; margin-bottom: 30px; }}
+            .title {{ font-size: 24px; font-weight: bold; color: #1E3A8A; text-transform: uppercase; }}
+            .meta-table {{ width: 100%; border-collapse: collapse; margin-bottom: 30px; }}
+            .meta-table td {{ padding: 8px; border: 1px solid #E2E8F0; }}
+            .meta-table td.label {{ font-weight: bold; background-color: #F8FAFC; width: 30%; }}
+            .data-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+            .data-table th {{ background-color: #1E3A8A; color: white; padding: 12px; text-align: left; font-size: 14px; }}
+            .data-table td {{ padding: 12px; border: 1px solid #E2E8F0; font-size: 13px; }}
+            .data-table tr:nth-child(even) {{ background-color: #F8FAFC; }}
+            .footer {{ margin-top: 50px; border-top: 1px solid #CBD5E1; padding-top: 15px; font-size: 11px; color: #64748B; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="title">CRIP v3.5 Pro - Financial Risk Audit Package</div>
+            <div style="font-size: 12px; color: #64748B; margin-top: 50px;">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Synchronized Accra Timezone</div>
+        </div>
+        
+        <h3>💼 Executive Summary Overview</h3>
+        <table class="meta-table">
+            <tr>
+                <td class="label">Total Managed Asset Valuation</td>
+                <td>GH₵ {global_total_valuation:,.2f}</td>
+            </tr>
+            <tr>
+                <td class="label">Aggregate Exposure Window Range</td>
+                <td>GH₵ {global_exposure_min:,.2f} - GH₵ {global_exposure_max:,.2f}</td>
+            </tr>
+            <tr>
+                <td class="label">Model Calibration Confidence Score</td>
+                <td>{system_confidence * 100:.1f}%</td>
+            </tr>
+            <tr>
+                <td class="label">Primary Security Authorization Tag</td>
+                <td>{st.session_state.get('auth_token', 'UNAUTHORIZED')}</td>
+            </tr>
+        </table>
+
+        <h3>📊 Crop Cluster Strategic Risk Stratification</h3>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Farm Node Cluster Name</th>
+                    <th>Active Asset Crop</th>
+                    <th>Total Valuation (GHS)</th>
+                    <th>Value At Risk (GHS)</th>
+                    <th>Identified Trend Vector</th>
+                </tr>
+            </thead>
+            <tbody>
+    """
+    for _, row in rank_df.iterrows():
+        html_payload += f"""
+                <tr>
+                    <td>{row['Farm Node Cluster Name']}</td>
+                    <td>{row['Active Asset Crop']}</td>
+                    <td>GH₵ {row['Total Valuation (GHS)']:,.2f}</td>
+                    <td>GH₵ {row['Value At Risk (GHS)']:,.2f}</td>
+                    <td>{row['Identified Trend Vector']}</td>
+                </tr>
+        """
+    html_payload += f"""
+            </tbody>
+        </table>
+        
+        <div class="footer">
+            CRIP v3.5 Pro Platform | Developed by Christian Kumi — Meteorology, Climate Science & Software Architecture at KNUST.<br>
+            Confidential Integrity Manifest Document - Internal Corporate Assessment Targets Only.
+        </div>
+    </body>
+    </html>
+    """
+    return html_payload
+
+# ==========================================
 # 🖥️ LAYER 5: ENTERPRISE FINANCIAL DASHBOARD PRESENTATION
 # ==========================================
 st.title("🌍 Climate Financial Risk Intelligence Engine (v3.5 Pro)")
 st.caption(f"🛡️ Hardened Production Infrastructure | Salt-Chained Vault | Verification Stamp: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 st.markdown("---")
 
-# Priority 2: Degraded Mode Risk Intervention Banner
 if system_degraded_active:
     st.error("### 🚨 SYSTEM STATUS: DEGRADED OPERATION\nRemote meteorological APIs are currently unreachable. To insulate corporate models from bad inputs, all predictive financial exposure metrics and calculation engines have been strictly frozen. Field protocols remain accessible.")
 
-# System Strategic Insight Directive Card
 st.error(f"### 📢 System Strategic Insight Directive\n**{highest_trend_label}:** {insight_narrative_summary}")
 
-# Executive Summary Cards Row
 st.markdown("### 📋 Portfolio High-Level Exposure Metrics")
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Total Managed Asset Valuation", f"GH₵ {global_total_valuation:,.2f}")
 
-# Freeze Exposure cards under Degraded state to protect executives from bad information
 if system_degraded_active:
     m2.metric("Aggregate Predictive Exposure Range", "❌ SYSTEM HALT")
 else:
     m2.metric("Aggregate Predictive Exposure Range", f"GH₵ {global_exposure_min:,.2f} – GH₵ {global_exposure_max:,.2f}" if st.session_state.user_role != "Farm Manager" else "🔐 CLEARANCE REQ.")
     
 m3.metric("Systemic Trend Vectors", "STABLE OUTLOOK" if not portfolio_alerts else "ACTION REQUIRED")
-# 10x Upgrade Metric Display
 m4.metric("Model Prediction Confidence", f"{system_confidence * 100:.1f}%", delta="Statistically Calibrated")
 
 st.subheader("📊 Crop Cluster Risk Stratification Ranking")
 st.dataframe(rank_df, use_container_width=True, hide_index=True)
 
-# Data Export Center
+# Data Export Center (Fixed Browser File Stream Engine)
 st.markdown("#### 📥 Corporate Reporting & Compliance Export")
 exp_col1, exp_col2, _ = st.columns([1, 1, 2])
 with exp_col1:
@@ -318,12 +392,17 @@ with exp_col1:
         file_name=f"CRIP_Exposure_Manifest_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", use_container_width=True
     )
 with exp_col2:
-    if st.button("📑 Generate Formatted PDF Report", use_container_width=True):
-        st.info("System Triggered: Formatted PDF compliance documentation package successfully exported.")
+    # Safely pipelines structured binary document data straight down to local browser instance
+    st.download_button(
+        label="📑 Download Compliance Documentation",
+        data=generate_compliance_report_html(),
+        file_name=f"CRIP_Compliance_Report_{datetime.now().strftime('%Y%m%d')}.html",
+        mime="text/html",
+        use_container_width=True
+    )
 
 st.markdown("---")
 
-# Main Analytical Data Layout Split
 col1, col2 = st.columns([3, 2])
 
 with col1:
@@ -361,7 +440,6 @@ with col2:
         
         if submit_btn:
             if action_desc:
-                # Grab modeled boundary threshold for calibrator calculation
                 max_modeled_loss = rank_df.loc[rank_df["Farm Node Cluster Name"] == target_cluster, "Value At Risk (GHS)"].values[0] if not system_degraded_active else 0.0
                 
                 conn = sqlite3.connect("climate_risk_vault.db")
@@ -375,12 +453,10 @@ with col2:
                     "System Incident Response Review", manager_identity, action_desc, actual_loss, max_modeled_loss, "🔒 Audited & Sealed"
                 ))
                 
-                # ❌ PRIORITY 3: Dampened & Capped Machine Learning Calibration (No Drift)
                 if actual_loss > 0 and max_modeled_loss > 0:
                     error_ratio = actual_loss / max_modeled_loss
                     
                     if error_ratio < 0.7:
-                        # Actions outperformed models: reduce risk high coefficient by a smoothed, capped 2% maximum
                         cursor.execute("""
                             UPDATE calibration_matrix 
                             SET heavy_rain_high = max(0.05, heavy_rain_high * 0.98),
@@ -388,7 +464,6 @@ with col2:
                             WHERE crop_type = ?
                         """, (PORTFOLIO_REGISTRY[target_cluster]["crop"],))
                     elif error_ratio > 1.2:
-                        # Damage exceeded expectations: escalate risk boundary by a smoothed, capped 2% maximum
                         cursor.execute("""
                             UPDATE calibration_matrix 
                             SET heavy_rain_high = min(0.95, heavy_rain_high * 1.02),
@@ -403,7 +478,6 @@ with col2:
             else:
                 st.error("Submission failed: Action description cell empty.")
 
-# Display Locked History Data Log Panel
 st.markdown("---")
 st.header("📜 Immutable Corporate Accountability Ledger (SQLite Stored)")
 
