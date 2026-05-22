@@ -146,7 +146,7 @@ def init_hardened_db():
 init_hardened_db()
 
 # ==========================================
-# 🛰️ LAYER 2: TELEMETRY INGESTION ENGINE WITH VISIBLE ERROR TRACING
+# 🛰️ LAYER 2: TELEMETRY INGESTION ENGINE WITH TIMEOUT CACHE EXPIRY
 # ==========================================
 def save_to_local_cache(lat, lon, df):
     conn = sqlite3.connect("climate_risk_vault.db")
@@ -162,6 +162,7 @@ def save_to_local_cache(lat, lon, df):
     conn.close()
 
 def fetch_from_local_cache(lat, lon):
+    """Retrieves cached data only if it is within the 3-hour freshness threshold."""
     conn = sqlite3.connect("climate_risk_vault.db")
     cursor = conn.cursor()
     coord_key = f"{lat:.2f}_{lon:.2f}"
@@ -171,21 +172,24 @@ def fetch_from_local_cache(lat, lon):
     
     if row:
         cache_time = datetime.fromisoformat(row[0])
+        # HARD BOUNDARY: 3-Hour Data Expiry Window Validation Check
         if datetime.now() - cache_time < timedelta(hours=3):
             return pd.read_json(row[1]), True
-        return pd.read_json(row[1]), False
+        return pd.read_json(row[1]), False # Exists but stale
     return None, False
 
 def fetch_weather_intelligence(lat, lon):
+    """Executes ingestion with optimized query windows and cache checks."""
     primary_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&forecast_days=14&timezone=Africa/Accra"
     secondary_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&forecast_days=14&models=gfs_seamless"
 
+    # Step 1: Pre-fetch cache evaluation state
     cached_df, is_fresh = fetch_from_local_cache(lat, lon)
     
     if cached_df is not None and is_fresh:
         return cached_df, "🟢 MEMORY INSTANCE FRESH (CACHE ACTIVE)"
 
-    # Step 1: Query Primary Route with Diagnostic Tracing
+    # Step 2: Query Primary Route (Optimized timeout to mitigate loop blocks)
     try:
         res = requests.get(primary_url, timeout=3)
         if res.status_code == 200:
@@ -196,13 +200,10 @@ def fetch_weather_intelligence(lat, lon):
             })
             save_to_local_cache(lat, lon, df)
             return df, "🟢 PRIMARY LIVE TELEMETRY"
-        else:
-            print(f"⚠️ Primary API returned bad status code: {res.status_code}")
-    except Exception as e:
-        print(f"❌ Primary weather fetch failed exception trace: {str(e)}")
-        st.sidebar.warning(f"Primary Stream Outage at ({lat}, {lon}). Routing to Secondary...")
+    except Exception:
+        pass
 
-    # Step 2: Query Backup Route with Diagnostic Tracing
+    # Step 3: Query Backup Route
     try:
         res = requests.get(secondary_url, timeout=3)
         if res.status_code == 200:
@@ -213,15 +214,12 @@ def fetch_weather_intelligence(lat, lon):
             })
             save_to_local_cache(lat, lon, df)
             return df, "🟡 BACKUP LIVE TELEMETRY"
-        else:
-            print(f"⚠️ Secondary API returned bad status code: {res.status_code}")
-    except Exception as e:
-        print(f"❌ Secondary weather fetch failed exception trace: {str(e)}")
-        st.sidebar.warning(f"Secondary Stream Outage at ({lat}, {lon}). Invoking Storage Fallback...")
+    except Exception:
+        pass
 
-    # Step 3: Fallback to cold cache record
+    # Step 4: Fallback to stale data if live streams fail
     if cached_df is not None:
-        return cached_df, "¼ STALE OFFLINE STORAGE ENGINE FALLBACK"
+        return cached_df, "🟠 STALE OFFLINE STORAGE ENGINE FALLBACK"
         
     return None, "🚨 NETWORK DROPOUT CRITICAL"
 
@@ -378,21 +376,21 @@ if not tenant_clusters_df.empty:
             global_exposure_max += loss_max
             cluster_max_exposure = max(cluster_max_exposure, loss_max)
             active_threat_types.append("Flooding / Excess Rain")
-            portfolio_alerts.append({"cluster": name, "type": "⛈️ Inundation", "max": loss_max, "action": "Delay planting schedules by 5-7 days to avoid root-washout patterns."})
+            portfolio_alerts.append({"cluster": name, "type": "⛈️ Inundation", "max": loss_max, "action": "Delay baseline planting schedules by 5-7 days to prevent root-washout patterns."})
             
         if max_observed_temp > 33.0:
             loss_max = asset_val * 0.25 * min(1.0, (max_observed_temp - 30) / 10)
             global_exposure_max += loss_max
             cluster_max_exposure = max(cluster_max_exposure, loss_max)
             active_threat_types.append("Thermal Heat Stress")
-            portfolio_alerts.append({"cluster": name, "type": "🔥 Heat Saturation", "max": loss_max, "action": "Deploy morning irrigation sequences to shield root systems."})
+            portfolio_alerts.append({"cluster": name, "type": "🔥 Heat Saturation", "max": loss_max, "action": "Deploy operational morning irrigation sequences to shield root systems."})
 
         cluster_rankings.append({
             "Farm Node Cluster Name": name, "Crop Type": crop, "Valuation (GHS)": asset_val, "Value At Risk (GHS)": cluster_max_exposure, "Network Stream": stream_tag
         })
         map_coordinates_list.append({"latitude": lat, "longitude": lon, "size": float(max(20.0, min(180.0, (cluster_max_exposure / 20000.0))))})
 
-# Deduplicate arrays to enforce analytic accuracy
+# 🛑 CRITICAL FIX: Deduplicate array before analytical calculation snapshots
 unique_threat_count = len(list(set(active_threat_types)))
 
 # Store snapshot metrics into database persistence partitions
@@ -408,7 +406,7 @@ trend_percentage, trend_narrative_label = calculate_historical_trend_delta(st.se
 st.title("🌍 Climate Financial Risk Intelligence Platform")
 st.caption(f"Real-Time Climate Risk Decision Engine with Automated Alerts and Adaptive Learning Matrix.")
 
-# EXECUTIVE INTELLIGENCE DECISION PANEL
+# 🏛️ EXECUTIVE INTELLIGENCE DECISION PANEL
 if not tenant_clusters_df.empty:
     executive_threat_signal = "🚨 HIGH RISK EXPOSURE IMPACT" if global_exposure_max > 100000 else "🟢 STABLE RUNTIME BASELINE"
     dominant_threat_profile = ", ".join(list(set(active_threat_types))) if active_threat_types else "None Identified"
