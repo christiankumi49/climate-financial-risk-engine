@@ -10,7 +10,7 @@ from datetime import datetime
 st.set_page_config(page_title="Climate Financial Risk Intelligence Platform (V3.5 Pro)", layout="wide")
 
 # ==========================================
-# 💾 LAYER 1: DATA PERSISTENCE & AIRTIGHT DB SECURITY (Priority 1)
+# 💾 LAYER 1: DATA PERSISTENCE & AIRTIGHT DB SECURITY
 # ==========================================
 def generate_dynamic_salt():
     """Generates a unique, unpredictable 16-byte cryptographic salt per user."""
@@ -26,7 +26,7 @@ def init_hardened_db():
     conn = sqlite3.connect("climate_risk_vault.db")
     cursor = conn.cursor()
     
-    # 1. Hardened Users Table with Unique Per-User Salts (Priority 1)
+    # 1. Hardened Users Table with Unique Per-User Salts
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
@@ -114,8 +114,8 @@ def compute_trend_signal(df):
         return "⚠️ DATA INCOMPLETE", "STABLE"
     week1_rain = df.iloc[0:7]["Rainfall (mm)"].sum()
     week2_rain = df.iloc[7:14]["Rainfall (mm)"].sum()
-    week1_heat_days = len(df.iloc[0:7][df.iloc[0:7]["Max Temp (°C)"] > 35.0])
-    week2_heat_days = len(df.iloc[7:14][df.iloc[7:14]["Max Temp (°C)"] > 35.0])
+    week1_heat_days = len(df.iloc[0:7][df.iloc[0:7]["Max Temp (°C)"] > 33.0])
+    week2_heat_days = len(df.iloc[7:14][df.iloc[7:14]["Max Temp (°C)"] > 33.0])
     
     if week2_rain > (week1_rain * 1.25) or week2_heat_days > week1_heat_days:
         return "📈 ACCELERATING THREAT", f"Precipitation signals shifting from {week1_rain:.1f}mm (W1) to {week2_rain:.1f}mm (W2)."
@@ -231,32 +231,45 @@ for name, meta in PORTFOLIO_REGISTRY.items():
     
     if "ACCELERATING" in trend_status:
         highest_trend_label = "⚠️ ACCELERATING RISK PROFILE"
-        insight_narrative_summary = f"Systemic precipitation and thermal trendlines are accelerating across the {name} baseline footprint."
+        insight_narrative_summary = f"Systemic precipitation and thermal trendlines are accelerating across the portfolio footprint."
     
-    for _, row in weather_df.iterrows():
-        if row["Rainfall (mm)"] > 45.0:
-            loss_min, loss_max = asset_val * hr_low, asset_val * hr_high
-            global_exposure_min += loss_min
-            global_exposure_max += loss_max
-            cluster_max_exposure = max(cluster_max_exposure, loss_max)
-            cluster_threats.append("Intense Rainfall")
-            portfolio_alerts.append({
-                "cluster": name, "date": row["Date"], "type": "⛈️ Inundation Exposure", "severity": "High", "min": loss_min, "max": loss_max,
-                "action": "Delay scheduled fertilizer top-dressing; deploy secondary channels.",
-                "roi": "Investing GH₵ 40,000 in proactive block pumping mitigates GH₵ 150,000 in direct valuation decay."
-            })
-            
-        if row["Max Temp (°C)"] > 35.0:
-            loss_min, loss_max = asset_val * hs_low, asset_val * hs_high
-            global_exposure_min += loss_min
-            global_exposure_max += loss_max
-            cluster_max_exposure = max(cluster_max_exposure, loss_max)
-            cluster_threats.append("Thermal Stress")
-            portfolio_alerts.append({
-                "cluster": name, "date": row["Date"], "type": "🔥 Thermal Stress", "severity": "Medium", "min": loss_min, "max": loss_max,
-                "action": "Initiate dawn pre-watering cycle frequency optimization protocols.",
-                "roi": "Deploying canopy moisture defenses reduces asset degradation exposure profiles by 18%."
-            })
+    # --- CONTINUOUS MATHEMATICAL CALCULATION LOGIC ENGINE ---
+    total_rainfall_14days = weather_df["Rainfall (mm)"].sum()
+    max_observed_temp = weather_df["Max Temp (°C)"].max()
+    
+    # 1. Active Inundation Risk Engine
+    if total_rainfall_14days > 5.0:
+        rain_severity_factor = min(1.0, total_rainfall_14days / 80.0)
+        loss_min = asset_val * hr_low * rain_severity_factor
+        loss_max = asset_val * hr_high * rain_severity_factor
+        
+        global_exposure_min += loss_min
+        global_exposure_max += loss_max
+        cluster_max_exposure = max(cluster_max_exposure, loss_max)
+        cluster_threats.append("Precipitation Saturation")
+        
+        portfolio_alerts.append({
+            "cluster": name, "date": "14-Day Cumulative Outlook", "type": "⛈️ Inundation Exposure", "severity": "Dynamic Risk", "min": loss_min, "max": loss_max,
+            "action": "Adjust drainage channel baseline capacities; audit lower field topsoil metrics.",
+            "roi": f"Proactive trench management mitigates up to GH₵ {loss_max * 0.35:,.2f} in active crop damage."
+        })
+        
+    # 2. Active Thermal Evaporation Engine
+    if max_observed_temp > 25.0:
+        temp_severity_factor = min(1.0, (max_observed_temp - 25.0) / 12.0)
+        loss_min = asset_val * hs_low * temp_severity_factor
+        loss_max = asset_val * hs_high * temp_severity_factor
+        
+        global_exposure_min += loss_min
+        global_exposure_max += loss_max
+        cluster_max_exposure = max(cluster_max_exposure, loss_max)
+        cluster_threats.append("Thermal Evaporation")
+        
+        portfolio_alerts.append({
+            "cluster": name, "date": "Peak Forecast Horizon", "type": "🔥 Thermal Stress", "severity": "Dynamic Risk", "min": loss_min, "max": loss_max,
+            "action": "Optimize early morning canopy moisture levels via calibrated irrigation cycles.",
+            "roi": f"Deploying water management buffers insulates crop yields, protecting GH₵ {loss_min:,.2f} from baseline decay."
+        })
 
     cluster_rankings.append({
         "Farm Node Cluster Name": name,
@@ -273,7 +286,7 @@ if not insight_narrative_summary:
     insight_narrative_summary = "All monitored regional zones are operating inside verified optimal climate boundaries over the execution horizon."
 
 # ==========================================
-# 📊 LAYER 4.5: SECURE REPORTING PIPELINE (PDF/HTML EXPORT CONVERSION ENGINE)
+# 📊 LAYER 4.5: SECURE REPORTING PIPELINE (HTML EXPORT ENGINE)
 # ==========================================
 def generate_compliance_report_html():
     """Generates an enterprise-formatted document layout for audit compliance packages."""
@@ -297,7 +310,7 @@ def generate_compliance_report_html():
     <body>
         <div class="header">
             <div class="title">CRIP v3.5 Pro - Financial Risk Audit Package</div>
-            <div style="font-size: 12px; color: #64748B; margin-top: 50px;">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Synchronized Accra Timezone</div>
+            <div style="font-size: 12px; color: #64748B; margin-top: 5px;">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Synchronized Accra Timezone</div>
         </div>
         
         <h3>💼 Executive Summary Overview</h3>
@@ -383,7 +396,7 @@ m4.metric("Model Prediction Confidence", f"{system_confidence * 100:.1f}%", delt
 st.subheader("📊 Crop Cluster Risk Stratification Ranking")
 st.dataframe(rank_df, use_container_width=True, hide_index=True)
 
-# Data Export Center (Fixed Browser File Stream Engine)
+# Data Export Center
 st.markdown("#### 📥 Corporate Reporting & Compliance Export")
 exp_col1, exp_col2, _ = st.columns([1, 1, 2])
 with exp_col1:
@@ -392,7 +405,6 @@ with exp_col1:
         file_name=f"CRIP_Exposure_Manifest_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", use_container_width=True
     )
 with exp_col2:
-    # Safely pipelines structured binary document data straight down to local browser instance
     st.download_button(
         label="📑 Download Compliance Documentation",
         data=generate_compliance_report_html(),
@@ -413,7 +425,7 @@ with col1:
         st.success("✅ Macro Environment Analysis: No active asset threat vectors identified crossing compliance rules.")
     else:
         for p in portfolio_alerts:
-            with st.expander(f"⚠️ {p['severity']} Vector: {p['type']} at {p['cluster']} ({p['date']})", expanded=True):
+            with st.expander(f"⚠️ {p['severity']}: {p['type']} at {p['cluster']}", expanded=False):
                 st.markdown(f"**Structural Exposure Line:** `GH₵ {p['min']:,.2f} – GH₵ {p['max']:,.2f}`" if st.session_state.user_role != "Farm Manager" else "**Structural Exposure Line:** `🔐 CLEARANCE REQUIRED`")
                 st.markdown(f"🚜 **Tactical Field Response:** {p['action']}")
                 st.markdown(f"💰 **Financial Strategic ROI Engine Recommendation:** *{p['roi']}*")
