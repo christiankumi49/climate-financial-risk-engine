@@ -49,8 +49,10 @@ class DatabaseWorkspaceManager:
         self.conn = None
 
     def __enter__(self):
-        # FIX: check_same_thread=False prevents Streamlit multi-session context exceptions
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=15.0)
+        # FIX: Added check_same_thread=False and an aggressive timeout to handle concurrency
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
+        # FIX: Enable Write-Ahead Logging (WAL) to completely prevent operational concurrency locks
+        self.conn.execute("PRAGMA journal_mode=WAL;")
         return self.conn.cursor()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -264,7 +266,6 @@ def route_emergency_broadcast(org_id, target_exposure, primary_threat):
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=45)
 st.sidebar.title("CRIP Gateway v3.5 Pro")
 
-# FIX: Initialize all required state keys safely to prevent pre-auth layout evaluation crashes
 if "auth_token" not in st.session_state: st.session_state.auth_token = None
 if "account_tier" not in st.session_state: st.session_state.account_tier = "Standard Demo"
 if "org_id" not in st.session_state: st.session_state.org_id = None
